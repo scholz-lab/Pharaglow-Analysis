@@ -7,7 +7,7 @@ The environment from PharaGlow is necessary for the Notebooks in this repository
 
 ## Post PharaGlow analysis
 
-There are two Notebook options depending on if the recording condition had a lawn or not.
+There are two Notebook options depending on if the recording condition has a lawn or not.
 
 ### With lawn:
 
