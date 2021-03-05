@@ -117,7 +117,7 @@ class Worm:
         traj_Resampled['angle'] = traj_Resampled.apply(lambda row: angle(row), axis =1)
         rev = traj_Resampled.index[traj_Resampled.angle>=angle_treshold]
         self.data['reversals'] = 0
-        self.data['reversals'].loc[rev] = 1
+        self.data.loc[rev,'reversals'] = 1
         
 
 class Experiment:
@@ -195,6 +195,10 @@ class Experiment:
         #TODO test and adapt
         self.stimulus = np.loadtxt(filename)
     
+    def calculate_reversals(self, animal_size, angle_treshold):
+        """calculate the reversals for each worm"""
+        for worm in self.samples:
+            worm.calculate_reversals(animal_size, angle_treshold)
     ######################################
     #
     #   get/set attributes
@@ -204,6 +208,8 @@ class Experiment:
         """sets the color used for plotting this experiment. Can be a defined color string or hex-code.
             Anything that matlab understands is valid.
         """
+        self.color = color
+
 
     def get_sample(self, N):
         """get a sample of the experiment.
@@ -237,10 +243,12 @@ class Experiment:
     #   Plotting functions
     #
     #######################################
-    def plot_trajectories(self, ax):
+    def plot_2d(self, key1, key2, ax, single=False):
         """plot all x-y trajectories."""
-        for worm in self.samples:
-            ax.plot(worm.data.x, worm.data.y, color = None)
+        
+        if len(ax) == 1:
+            for worm in self.samples:
+                ax.plot(worm.data[key1], worm.data[key2], color = self.color)
 
 
     def plot_timeseries(self, key, ax, average = True):
@@ -265,10 +273,8 @@ class Experiment:
 #    Example code loading an experiment
 #
 #######################################
-
 control = Experiment(strain='GRU101', condition='Entry', scale=2.34, fps = 30.)
 control.load_data('/home/mscholz/Desktop/TestOutput_MS0006', nmax = 2)
-
 ######################################
 #
 #    class supports slicing
@@ -276,30 +282,38 @@ control.load_data('/home/mscholz/Desktop/TestOutput_MS0006', nmax = 2)
 #######################################
 # get just a few samples. a is still an Experiment object
 a = control[0:2]
-# if you want the worm class, use get_sample(n) 
+# if you want to access the underlying worm class, use get_sample(n) 
 w = control.get_sample(0)
-
 ######################################
 #
 #    calculate metrics at the worm level or experiment level
 #
 #######################################
-
-# for i, metric in enumerate(['mean', 'sem', 'std', 'N']):
-#     plt.subplot(2,2,i+1)
-#     t = a.get_sample_metric('velocity', metric)
-#     plt.plot(t)
-# plt.show()
-
-# plt.show()
-# a.plot_trajectories(plt.gca())
-# plt.show()
-w = control.get_sample(0)
-w.calculate_reversals(animal_size=50, angle_treshold=120)
-w.get_data('reversals').plot()
-plt.show()
-print(w)
+# metric at the worm level.
 for i in ['mean', 'sem', 'std', 'N']:
     t = w.get_metric('velocity', i)
     print(t)
+# metric at the experiment level.
+plt.figure()
+key = 'velocity'
+for i, metric in enumerate(['mean', 'sem', 'std', 'N']):
+    plt.subplot(2,2,i+1)
+    t = a.get_sample_metric(key, metric)
+    plt.plot(t)
+    plt.ylabel(f"{metric} {key}")
 plt.show()
+######################################
+#
+#    calculate reversals/stimulus alignment
+#
+#######################################
+control.calculate_reversals(animal_size=50, angle_treshold=120)
+#TODO add stimulus alignment
+######################################
+#
+#   plotting utilities
+#
+#######################################
+# scatter two variables against each other
+ax = plt.subplot(111)
+control.plot_2d('velocity', 'rate', ax)
