@@ -1,10 +1,18 @@
+import os
+import pickle
+import warnings
+
+
 import numpy as np
 import pandas as pd
-import os
 import matplotlib.pylab as plt
+
+from . import style
+from .tools import PickleDumpLoadMixin
 from pharaglow import io, extract
 
-class Worm:
+
+class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
     def __init__(self, filename, columns,fps, scale, **kwargs):
         """initialize object and load a pharaglow results file."""
@@ -58,7 +66,7 @@ class Worm:
     #######################################
 
     def get_metric(self, key, metric):
-        """return metrics of a data column."""
+        """return metrics of a data column given by key."""
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
         if metric == "mean":
             return self.data[key].mean()
@@ -118,9 +126,23 @@ class Worm:
         rev = traj_Resampled.index[traj_Resampled.angle>=angle_treshold]
         self.data['reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
+    
+    
+    def multi_align(self, timepoints, tau_before, tau_after, key = None):
+        """align to multiple timepoints.
+         Inputs:
+                timepoints: list of timepoints to align to in frames
+                tau_before: number of frames before timepoint
+                tau_after: number of frames after timepoint
+                key is a string or list of strings as column names.
+        """
+        self.aligned_data = []
+        for timepoint in timepoints:
+            tstart, tend = timepoint -tau_before, timepoint+tau_after
+            self.aligned_data.append(self.data.loc[tstart:tend, key])
         
 
-class Experiment:
+class Experiment(PickleDumpLoadMixin):
     """Wrapper class which is a container for individual worms."""
     # class attributes
     def __init__(self, strain, condition, scale, fps, samples = None, color = None):
@@ -177,6 +199,8 @@ class Experiment:
             Params: 
                 append: append to existing samples. If False, start with an empty experiment.
         """
+        if nmax == None:
+            nmax = np.inf
         if not append:
             self.samples = []
         j = 0
@@ -238,82 +262,117 @@ class Experiment:
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
 
+
     ######################################
     #
     #   Plotting functions
     #
     #######################################
-    def plot_2d(self, key1, key2, ax, single=False):
-        """plot all x-y trajectories."""
-        
-        if len(ax) == 1:
-            for worm in self.samples:
-                ax.plot(worm.data[key1], worm.data[key2], color = self.color)
+    def plot_2d(self, key1, key2, ax, average = True, plot_type = 'line', **kwargs):
+        """plot any x-y scatter or correlation.
+            Inputs:
+                key1: string, column of data in the Worm object.
+                key2: string, column of data in the Worm object.
+                ax: either matplotlib axis object or list of axes
+                average: if true, plot the sample means of each key
+        """
+        #each worm sample in a subplot
+        if isinstance(ax, list):
+            for wi, worm in enumerate(self.samples):
+                if wi>len(ax):
+                    warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+                ax[(wi+1)%len(ax)].plot(worm.get_data(key1), worm.get_data(key2), color = self.color, **kwargs)
+        else:
+            # time averaged data in a single subplot 
+            if average:
+                y1 = self.get_sample_metric(key1, metric = 'mean')
+                y2 = self.get_sample_metric(key2, metric = 'mean')
+                ax.plot(y1, y2, color = self.color, **kwargs)
+            # all individual samples in one subplot
+            else:
+                for wi, worm in enumerate(self.samples):
+                    ax.plot(worm.get_data(key1), worm.get_data(key2), **kwargs)
 
 
-    def plot_timeseries(self, key, ax, average = True):
+    def plot_kde(self, key1, key2, ax, average = True,  **kwargs):
+        """plot a kernel-density estimate for two variables.
+            Inputs:
+                key1: string, column of data in the Worm object.
+                key2: string, column of data in the Worm object.
+                ax: either matplotlib axis object or list of axes
+                average: if true, plot the sample means of each key
+        """
+        #each worm sample in a subplot
+        if isinstance(ax, list):
+            for wi, worm in enumerate(self.samples):
+                if wi>len(ax):
+                    warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+                    x, y = worm.get_data(key1), worm.get_data(key2)
+                    filt = np.where(np.isfinite(x)*np.isfinite(y))
+                    style.KDE_plot(ax[(wi+1)%len(ax)], x.loc[filt],y.loc[filt], color = self.color, **kwargs)
+        else:
+            # time averaged data in a single subplot 
+            if average:
+                x = self.get_sample_metric(key1, metric = 'mean')
+                y = self.get_sample_metric(key2, metric = 'mean')
+                filt = np.where(np.isfinite(x)*np.isfinite(y))
+                style.KDE_plot(ax, x.loc[filt],y.loc[filt], color = self.color, **kwargs)
+            # all individual samples in one subplot
+            else:
+                for wi, worm in enumerate(self.samples):
+                    x, y = worm.get_data(key1), worm.get_data(key2)
+                    filt = np.where(np.isfinite(x)*np.isfinite(y))
+                    style.KDE_plot(ax, x.loc[filt],y.loc[filt], **kwargs)
+
+
+    def plot_timeseries(self, key, ax, average = True, error = 'sem', **kwargs):
         """plot a property as a function of time.
         Inputs:
             key is a column name in the Worm object.
             ax is the matplotlib axis to plot in, if a list of axes we will plot into each separately.
             average: average all data
         """
-        if isinstance(ax, plt.axes):
+        # each timeseries in a subplot
+        if isinstance(ax, list):
+            for wi, worm in enumerate(self.samples):
+                if wi>len(ax):
+                    raise Warning('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+                ax[(wi+1)%len(ax)].plot(worm.data(key), color = self.color, **kwargs)
+        else:
+            # average across samples
             if average:
-                for worm in self.samples:
-                    ax = plt.plot(worm.get_data(key))
+                y = self.get_sample_metric(key, metric = 'mean')
+                ax.plot(y, color = self.color, **kwargs)
+                # add error band
+                if error:
+                    yerr = self.get_sample_metric(key, metric = error)
+                    ax.fill_between(y.index, y-yerr, y+yerr, color = self.color, alpha = 0.5)
+            # all individual lines but in one subplot
+            else:
+                for wi, worm in enumerate(self.samples):
+                    ax.plot(worm.data(key), color = self.color, **kwargs)
         
 
-    def plot_averages(self, key, type):
-        pass
-    
+    def plot_averages(self, key, ax, loc = 0, plot_style = 'box',  **kwargs):
+        """plot average of a key for a sample (Worm).
+        Inputs:
+            key is a column name in the Worm object.
+            ax is the matplotlib axis to plot in, if a list of axes we will plot into each separately.
+            plot_style: one of ('box', 'bar') boxplot or barplot.
+            loc: xlocation of the plot to allow adding multiple conditions in one.
+            **kwargs: gets passed onto Worm.get_metric
+        """
+        tmpdata = []
+        for worm in self.samples:
+            metric = 'mean'
+            # check if user gave us a different metric
+            if 'metric' in kwargs:
+                metric = kwargs['metric']
+            tmpdata.append(worm.get_metric(key, metric))
+        # plot boxplot
+        if plot_style == 'box':
+            style.scatterBoxplot(ax, [loc], [tmpdata], [self.color], [self.strain], **kwargs)
+        elif plot_style == 'bar':
+            ax.bar(loc, tmpdata, color = self.color, label = self.strain)
 
-######################################
-#
-#    Example code loading an experiment
-#
-#######################################
-control = Experiment(strain='GRU101', condition='Entry', scale=2.34, fps = 30.)
-control.load_data('/home/mscholz/Desktop/TestOutput_MS0006', nmax = 2)
-######################################
-#
-#    class supports slicing
-#
-#######################################
-# get just a few samples. a is still an Experiment object
-a = control[0:2]
-# if you want to access the underlying worm class, use get_sample(n) 
-w = control.get_sample(0)
-######################################
-#
-#    calculate metrics at the worm level or experiment level
-#
-#######################################
-# metric at the worm level.
-for i in ['mean', 'sem', 'std', 'N']:
-    t = w.get_metric('velocity', i)
-    print(t)
-# metric at the experiment level.
-plt.figure()
-key = 'velocity'
-for i, metric in enumerate(['mean', 'sem', 'std', 'N']):
-    plt.subplot(2,2,i+1)
-    t = a.get_sample_metric(key, metric)
-    plt.plot(t)
-    plt.ylabel(f"{metric} {key}")
-plt.show()
-######################################
-#
-#    calculate reversals/stimulus alignment
-#
-#######################################
-control.calculate_reversals(animal_size=50, angle_treshold=120)
-#TODO add stimulus alignment
-######################################
-#
-#   plotting utilities
-#
-#######################################
-# scatter two variables against each other
-ax = plt.subplot(111)
-control.plot_2d('velocity', 'rate', ax)
+        
