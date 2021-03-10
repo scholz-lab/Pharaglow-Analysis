@@ -82,6 +82,24 @@ class Worm(PickleDumpLoadMixin):
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
     
+    
+    def get_aligned_metric(self, key, metric):
+        """get averages across timepoints for a single worm. eg. average across multiple stimuli. 
+        Requires multi_align(self) to be run."""
+        assert len(self.aligned_data )>0, 'Please run Worm.align() or Worm.multi_align() first!'
+        assert key in self.data.columns, f'The key {key} does not exist in the data.'
+        tmp = pd.concat([data[key] for data in self.aligned_data], axis = 1)
+        if metric == "mean":
+            return tmp.mean(axis = 1)
+        if metric == "std":
+            return tmp.std(axis = 1)
+        if metric == "N":
+            return tmp.count(axis =1)
+        if metric == "sem":
+           return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
+        else:
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
+
 
     def get_data(self, key = None):
         """return a column of data or the whole pandas dataframe."""
@@ -90,6 +108,16 @@ class Worm(PickleDumpLoadMixin):
         else:
             assert key in self.data.columns, f'The key {key} does not exist in the data.'
             return self.data[key]
+
+
+    def get_data_aligned(self, index, key = None):
+        """return a column of aigned data or the whole aligned pandas dataframe at a specific timepoints."""
+        if key == None:
+            return self.data
+        else:
+            assert key in self.data.columns, f'The key {key} does not exist in the data.'
+            return self.data[key]
+            
     
 
     def calculate_reversals(self, animal_size, angle_treshold):
@@ -127,7 +155,25 @@ class Worm(PickleDumpLoadMixin):
         self.data['reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
     
+
+    def align(self, timepoint,  tau_before, tau_after, key = None):
+        """align to a timepoint.
+         Inputs:
+                timepoint: time to align to in frames
+                tau_before: number of frames before timepoint
+                tau_after: number of frames after timepoint
+                key is a string or list of strings as column names.
+        Output: creates a list of aligned dataframes centered around the timepoint 
+        """
+        if key == None:
+            key = self.data.columns
+        tstart, tend = timepoint -tau_before, timepoint+tau_after
+        tmp = self.data.loc[tstart:tend, key]
+        tmp = tmp.reindex(pd.Index(np.arange(tstart, tend)))
+        tmp.index = pd.Index(np.arange(-tau_before, tau_after))
+        return tmp
     
+
     def multi_align(self, timepoints, tau_before, tau_after, key = None):
         """align to multiple timepoints.
          Inputs:
@@ -135,11 +181,18 @@ class Worm(PickleDumpLoadMixin):
                 tau_before: number of frames before timepoint
                 tau_after: number of frames after timepoint
                 key is a string or list of strings as column names.
+        Output: creates a list of aligned dataframes centered around the timepoint 
         """
         self.aligned_data = []
-        for timepoint in timepoints:
-            tstart, tend = timepoint -tau_before, timepoint+tau_after
-            self.aligned_data.append(self.data.loc[tstart:tend, key])
+        self.timepoints = timepoints
+        if key == None:
+            key = self.data.columns
+        for timepoint in self.timepoints:
+            tmp = self.align(timepoint,  tau_before, tau_after, key = None)
+            self.aligned_data.append(tmp)
+
+
+    
         
 
 class Experiment(PickleDumpLoadMixin):
@@ -213,12 +266,18 @@ class Experiment(PickleDumpLoadMixin):
                 j += 1
                 
 
-
     def load_stimulus(self, filename):
         """load a stimulus file"""
         #TODO test and adapt
         self.stimulus = np.loadtxt(filename)
     
+
+    def align_data(self, timepoints, tau_before, tau_after, key = None):
+        """calculate aligned data for all worms"""
+        for worm in self.samples:
+            worm.multi_align(timepoints, tau_before, tau_after, key = None)
+
+
     def calculate_reversals(self, animal_size, angle_treshold):
         """calculate the reversals for each worm"""
         for worm in self.samples:
@@ -243,7 +302,7 @@ class Experiment(PickleDumpLoadMixin):
 
 
     def get_sample_metric(self, key, metric = None):
-        """ Average across samples as a function of time.
+        """ Metrics across samples as a function of time.
         """
         tmp = []
         for worm in self.samples:
@@ -261,6 +320,28 @@ class Experiment(PickleDumpLoadMixin):
            return tmp.std(axis = 1)/np.sqrt(len(self))
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
+
+
+    def get_sample_metric_aligned(self, key, metric):
+        """ Metrics across samples as a function of time. Uses stimulus/timepoint aligned data.
+        """
+        tmp = []
+        for worm in self.samples:
+            tmp.append(worm.get_data(key))
+        tmp = pd.concat(tmp, axis = 1)
+        if metric ==None:
+            return tmp
+        if metric == "mean":
+            return tmp.mean(axis = 1)
+        if metric == "std":
+            return tmp.std(axis = 1)
+        if metric == "N":
+            return tmp.count(axis = 1)
+        if metric == "sem":
+           return tmp.std(axis = 1)/np.sqrt(len(self))
+        else:
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
+
 
 
     ######################################

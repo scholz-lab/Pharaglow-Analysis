@@ -12,8 +12,10 @@ from pg_analysis import style
 #control.dump('test')
 control = Experiment.load('test')
 w = control.get_sample(0)
-w.multi_align([400], 300, 500, 'velocity')
-plt.plot(w.aligned_data[0])
+w.multi_align([400, 700, 500], 300, 500, None)
+plt.plot(w.get_aligned_metric('velocity', 'mean'))
+plt.plot(w.get_aligned_metric('velocity', 'std'))
+plt.plot(w.get_aligned_metric('velocity', 'N'))
 plt.show()
 ######################################
 #
@@ -57,7 +59,7 @@ w = control.get_sample(0)
 #    calculate metrics at the worm level or experiment level
 #
 #######################################
-# # metric at the worm level.
+# # metric at the worm level, eg. average velocity
 for i in ['mean', 'sem', 'std', 'N']:
     t = w.get_metric('velocity', i)
     print(t)
@@ -79,7 +81,7 @@ plt.show()
 #######################################
 control.calculate_reversals(animal_size=50, angle_treshold=120)
 # # align worm data to frame 200 plus 500 minus 300 frames
-plt.plot(w.align(400, 300, 500, 'velocity', valid = False))
+plt.plot(w.align(400, 300, 500, 'velocity'))
 plt.show()
 
 
