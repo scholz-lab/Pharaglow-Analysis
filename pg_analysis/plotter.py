@@ -37,20 +37,20 @@ class Worm(PickleDumpLoadMixin):
         #print(traj.info())
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         # pumping related data
-        try:
-            traj['pump_clean'] = extract.preprocess(traj['pumps'])
-            peaks, _,_  = extract.find_pumps(traj['pump_clean'], **kwargs)
-            # reset peaks to match frame
-            peaks += np.min(traj.frame)
-            # add interpolated pumping rate to dataframe
-            traj['rate'] = np.interp(traj['frame'], peaks[:-1], fps/np.diff(peaks))
-            # # get a binary trace where pumps are 1 and non-pumps are 0
-            traj['pump_events'] = 0
-            traj.loc[peaks,['pump_events']] = 1
-        except Exception:
-            print('Pumping extraction failed. Try with different parameters.')
-            self.flag = True
-            self.traj = []
+        #try:
+        traj['pump_clean'],_ = extract.preprocess(traj['pumps'], **kwargs)
+        peaks, _,_  = extract.find_pumps(traj['pump_clean'], **kwargs)
+        # reset peaks to match frame
+        peaks += np.min(traj.frame)
+        # add interpolated pumping rate to dataframe
+        traj['rate'] = np.interp(traj['frame'], peaks[:-1], fps/np.diff(peaks))
+        # # get a binary trace where pumps are 1 and non-pumps are 0
+        traj['pump_events'] = 0
+        traj.loc[peaks,['pump_events']] = 1
+        # #except Exception:
+        #     print('Pumping extraction failed. Try with different parameters.')
+        #     self.flag = True
+        #     self.traj = []
         self.data = traj
     
 
@@ -248,7 +248,7 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None):
+    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, w_bg = 10, w_sm = 2, **kwargs):
         """load all results files from a folder. 
             Inputs:
                 path: location of pharaglow results files
@@ -266,7 +266,7 @@ class Experiment(PickleDumpLoadMixin):
             if j >= nmax:
                 break
             if os.path.isfile(file) and 'results_' in fn and fn.endswith('.json'):
-                self.samples.append(Worm(file, columns, self.fps, self.scale))
+                self.samples.append(Worm(file, columns, self.fps, self.scale, **kwargs))
                 j += 1
                 
 
