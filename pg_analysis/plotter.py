@@ -39,7 +39,7 @@ class Worm(PickleDumpLoadMixin):
         # pumping related data
         try:
             traj['pump_clean'] = extract.preprocess(traj['pumps'])
-            peaks, _,_  = extract.find_pumps(traj['pumps_clean'], **kwargs)
+            peaks, _,_  = extract.find_pumps(traj['pump_clean'], **kwargs)
             # reset peaks to match frame
             peaks += np.min(traj.frame)
             # add interpolated pumping rate to dataframe
