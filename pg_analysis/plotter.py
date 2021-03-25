@@ -38,11 +38,10 @@ class Worm(PickleDumpLoadMixin):
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         # pumping related data
         try:
-            peaks, _,_  = extract.find_pumps(traj['pumps'], **kwargs)
+            traj['pump_clean'] = extract.preprocess(traj['pumps'])
+            peaks, _,_  = extract.find_pumps(traj['pumps_clean'], **kwargs)
             # reset peaks to match frame
             peaks += np.min(traj.frame)
-            traj['pump_clean'] = pump_clean
-            self.pump_quality = [pks, roc, metric]
             # add interpolated pumping rate to dataframe
             traj['rate'] = np.interp(traj['frame'], peaks[:-1], fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
