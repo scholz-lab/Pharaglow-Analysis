@@ -16,11 +16,13 @@ class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
     def __init__(self, filename, columns,fps, scale, **kwargs):
         """initialize object and load a pharaglow results file."""
+        self.fps = fps
+        self.scale = scale
         self.flag = False
         print('Reading', filename)
         # keep some metadata
-        self.particle_index = int(filename.split('.')[0].split('_')[-1])
-        self.experiment = filename[:6]
+        self.experiment = os.path.basename(filename)
+        self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
         self._load(filename, columns, fps, scale)
 
@@ -28,7 +30,7 @@ class Worm(PickleDumpLoadMixin):
     def _load(self, filename, columns, fps, scale, **kwargs):
         """load data."""
         traj = io.load(filename, orient='split')
-        # drop all columns except the ones we want
+        # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
         # velocity and real time
         traj['time'] = traj['frame']/fps
@@ -36,7 +38,7 @@ class Worm(PickleDumpLoadMixin):
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         # pumping related data
         try:
-            peaks, pump_clean, pks, roc, metric  = extract.bestMatchPeaks(traj['pumps'].values, **kwargs)
+            peaks, _,_  = extract.find_pumps(traj['pumps'], **kwargs)
             # reset peaks to match frame
             peaks += np.min(traj.frame)
             traj['pump_clean'] = pump_clean
@@ -192,9 +194,12 @@ class Worm(PickleDumpLoadMixin):
             self.aligned_data.append(tmp)
 
 
-    
-        
+    def calculate_count_rate(self, window):
+        """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
+        window is in frame. Result will be in Hz."""
+        self.data['count_rate'] = self.data['pump_events'].rolling(window, center=True, min_periods=1).sum()/window*self.fps
 
+    
 class Experiment(PickleDumpLoadMixin):
     """Wrapper class which is a container for individual worms."""
     # class attributes
