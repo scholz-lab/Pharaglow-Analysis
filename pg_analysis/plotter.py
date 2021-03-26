@@ -24,7 +24,16 @@ class Worm(PickleDumpLoadMixin):
         self.experiment = os.path.basename(filename)
         self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
-        self._load(filename, columns, fps, scale)
+        if "w_bg" not in kwargs.keys():
+            kwargs["w_bg"] = 10
+            print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
+        if "w_sm" not in kwargs.keys():
+            kwargs["w_sm"] = 2
+            print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
+        if "sensitivity" not in kwargs.keys():
+            kwargs["sensitivity"] = 0.9
+            print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
+        self._load(filename, columns, fps, scale, **kwargs)
 
 
     def _load(self, filename, columns, fps, scale, **kwargs):
@@ -38,15 +47,22 @@ class Worm(PickleDumpLoadMixin):
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         # pumping related data
         #try:
+        print(kwargs)
         traj['pump_clean'],_ = extract.preprocess(traj['pumps'], **kwargs)
         peaks, _,_  = extract.find_pumps(traj['pump_clean'], **kwargs)
-        # reset peaks to match frame
-        peaks += np.min(traj.frame)
-        # add interpolated pumping rate to dataframe
-        traj['rate'] = np.interp(traj['frame'], peaks[:-1], fps/np.diff(peaks))
-        # # get a binary trace where pumps are 1 and non-pumps are 0
-        traj['pump_events'] = 0
-        traj.loc[peaks,['pump_events']] = 1
+        if len(peaks)>0:
+            # reset peaks to match frame
+            peaks += np.min(traj.frame)
+            # add interpolated pumping rate to dataframe
+            traj['rate'] = np.interp(traj['frame'], peaks[:-1], fps/np.diff(peaks))
+            # # get a binary trace where pumps are 1 and non-pumps are 0
+            traj['pump_events'] = 0
+            traj.loc[peaks,['pump_events']] = 1
+        else:
+            traj['rate'] = 0
+            traj['pump_events'] = 0
+
+
         # #except Exception:
         #     print('Pumping extraction failed. Try with different parameters.')
         #     self.flag = True
@@ -248,7 +264,7 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, w_bg = 10, w_sm = 2, **kwargs):
+    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, **kwargs):
         """load all results files from a folder. 
             Inputs:
                 path: location of pharaglow results files
@@ -256,6 +272,7 @@ class Experiment(PickleDumpLoadMixin):
             Params: 
                 append: append to existing samples. If False, start with an empty experiment.
         """
+        
         if nmax == None:
             nmax = np.inf
         if not append:
