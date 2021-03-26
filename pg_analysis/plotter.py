@@ -130,7 +130,7 @@ class Worm(PickleDumpLoadMixin):
         # remove outliers
         self.data['pump_clean'] = extract.hampel(self.data['pumps'], w_bg*30)
         self.data['pump_clean'],_ = extract.preprocess(self.data['pump_clean'], w_bg, w_sm)
-        peaks, _,_  = extract.find_pumps(self.data['pump_clean'], min_distance,  sensitivity)
+        peaks, _,_  = extract.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity)
         if len(peaks)>0:
             # reset peaks to match frame
             peaks += np.min(self.data.frame)
