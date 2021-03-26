@@ -37,7 +37,8 @@ class Worm(PickleDumpLoadMixin):
         traj['time'] = traj['frame']/fps
         #print(traj.info())
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
-        # pumping related data
+        self.data = traj
+	# pumping related data
         if "w_bg" not in kwargs.keys():
             kwargs["w_bg"] = 10
             print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
@@ -56,7 +57,7 @@ class Worm(PickleDumpLoadMixin):
         #     print('Pumping extraction failed. Try with different parameters.')
         #     self.flag = True
         #     self.traj = []
-        self.data = traj
+        #self.data = traj
     
 
     def __repr__(self):
@@ -123,8 +124,8 @@ class Worm(PickleDumpLoadMixin):
         else:
             assert key in self.data.columns, f'The key {key} does not exist in the data.'
             return self.data[key]
-            
-    
+
+
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
@@ -135,7 +136,7 @@ class Worm(PickleDumpLoadMixin):
             # reset peaks to match frame
             peaks += np.min(self.data.frame)
             # add interpolated pumping rate to dataframe
-            self.data['rate'] = np.interp(self.data['frame'], peaks[:-1], fps/np.diff(peaks))
+            self.data['rate'] = np.interp(self.data['frame'], peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
             self.data['pump_events'] = 0
             self.data.loc[peaks,['pump_events']] = 1
