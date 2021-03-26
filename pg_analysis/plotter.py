@@ -24,15 +24,7 @@ class Worm(PickleDumpLoadMixin):
         self.experiment = os.path.basename(filename)
         self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
-        if "w_bg" not in kwargs.keys():
-            kwargs["w_bg"] = 10
-            print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
-        if "w_sm" not in kwargs.keys():
-            kwargs["w_sm"] = 2
-            print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
-        if "sensitivity" not in kwargs.keys():
-            kwargs["sensitivity"] = 0.9
-            print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
+        
         self._load(filename, columns, fps, scale, **kwargs)
 
 
@@ -46,23 +38,20 @@ class Worm(PickleDumpLoadMixin):
         #print(traj.info())
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         # pumping related data
-        #try:
-        print(kwargs)
-        traj['pump_clean'],_ = extract.preprocess(traj['pumps'], **kwargs)
-        peaks, _,_  = extract.find_pumps(traj['pump_clean'], **kwargs)
-        if len(peaks)>0:
-            # reset peaks to match frame
-            peaks += np.min(traj.frame)
-            # add interpolated pumping rate to dataframe
-            traj['rate'] = np.interp(traj['frame'], peaks[:-1], fps/np.diff(peaks))
-            # # get a binary trace where pumps are 1 and non-pumps are 0
-            traj['pump_events'] = 0
-            traj.loc[peaks,['pump_events']] = 1
-        else:
-            traj['rate'] = 0
-            traj['pump_events'] = 0
-
-
+        if "w_bg" not in kwargs.keys():
+            kwargs["w_bg"] = 10
+            print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
+        if "w_sm" not in kwargs.keys():
+            kwargs["w_sm"] = 2
+            print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
+        if "sensitivity" not in kwargs.keys():
+            kwargs["sensitivity"] = 0.9
+            print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
+        if "min_distance" not in kwargs.keys():
+            kwargs["min_distance"] = 4
+            print(f'Setting peak distance to {kwargs["min_distance"]} for pump extraction')
+        self.calculate_pumps(kwargs["w_bg"], kwargs["w_sm"], kwargs["min_distance"],  kwargs["sensitivity"])
+        
         # #except Exception:
         #     print('Pumping extraction failed. Try with different parameters.')
         #     self.flag = True
@@ -136,6 +125,23 @@ class Worm(PickleDumpLoadMixin):
             return self.data[key]
             
     
+    def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
+        """using a pump trace, get additional pumping metrics."""
+        # remove outliers
+        self.data['pump_clean'] = extract.hampel(self.data['pumps'], w_bg*30)
+        self.data['pump_clean'],_ = extract.preprocess(self.data['pump_clean'], w_bg, w_sm)
+        peaks, _,_  = extract.find_pumps(self.data['pump_clean'], min_distance,  sensitivity)
+        if len(peaks)>0:
+            # reset peaks to match frame
+            peaks += np.min(self.data.frame)
+            # add interpolated pumping rate to dataframe
+            self.data['rate'] = np.interp(self.data['frame'], peaks[:-1], fps/np.diff(peaks))
+            # # get a binary trace where pumps are 1 and non-pumps are 0
+            self.data['pump_events'] = 0
+            self.data.loc[peaks,['pump_events']] = 1
+        else:
+            self.data['rate'] = 0
+            self.data['pump_events'] = 0
 
     def calculate_reversals(self, animal_size, angle_treshold):
         """Adaptation of the Hardaker's method to detect reversal event. 
