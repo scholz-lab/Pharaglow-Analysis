@@ -24,7 +24,6 @@ class Worm(PickleDumpLoadMixin):
         self.experiment = os.path.basename(filename)
         self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
-        
         self._load(filename, columns, fps, scale, **kwargs)
 
 
@@ -38,27 +37,26 @@ class Worm(PickleDumpLoadMixin):
         #print(traj.info())
         traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         self.data = traj
-	# pumping related data
-        if "w_bg" not in kwargs.keys():
-            kwargs["w_bg"] = 10
-            print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
-        if "w_sm" not in kwargs.keys():
-            kwargs["w_sm"] = 2
-            print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
-        if "sensitivity" not in kwargs.keys():
-            kwargs["sensitivity"] = 0.9
-            print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
-        if "min_distance" not in kwargs.keys():
-            kwargs["min_distance"] = 4
-            print(f'Setting peak distance to {kwargs["min_distance"]} for pump extraction')
-        self.calculate_pumps(kwargs["w_bg"], kwargs["w_sm"], kwargs["min_distance"],  kwargs["sensitivity"])
-        
-        # #except Exception:
-        #     print('Pumping extraction failed. Try with different parameters.')
-        #     self.flag = True
-        #     self.traj = []
-        #self.data = traj
-    
+        try:
+	    # pumping related data
+            if "w_bg" not in kwargs.keys():
+                kwargs["w_bg"] = 10
+                print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
+            if "w_sm" not in kwargs.keys():
+                kwargs["w_sm"] = 2
+                print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
+            if "sensitivity" not in kwargs.keys():
+                kwargs["sensitivity"] = 0.9
+                print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
+            if "min_distance" not in kwargs.keys():
+                kwargs["min_distance"] = 4
+                print(f'Setting peak distance to {kwargs["min_distance"]} for pump extraction')
+            self.calculate_pumps(kwargs["w_bg"], kwargs["w_sm"], kwargs["min_distance"],  kwargs["sensitivity"])
+        except Exception:
+             print('Pumping extraction failed. Try with different parameters.')
+             self.flag = True
+             self.data = traj
+
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
