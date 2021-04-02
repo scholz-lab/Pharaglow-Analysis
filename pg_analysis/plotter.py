@@ -11,6 +11,80 @@ from . import style
 from .tools import PickleDumpLoadMixin
 from pharaglow import io, extract
 
+def _lineplot(x ,y, yerr, ax, **kwargs):
+    plot = []
+    if isinstance(ax, list):
+        for wi, xi in x.iterrows():
+            if wi>len(ax):
+                warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+            plot.append(ax[(wi+1)%len(ax)].plot(xi, y.iloc[wi], **kwargs))
+            if yerr is not None:
+                alpha = kwargs.pop('alpha', 0.5)
+                ax[(wi)%len(ax)].fill_between(xi, y-yerr.values, y+yerr.values, alpha = alpha, **kwargs)
+    else:
+        plot = ax.plot(x, y, **kwargs)
+        if yerr is not None:
+            alpha = kwargs.pop('alpha', 0.5)
+            ax.fill_between(x, y-yerr, y+yerr, alpha = alpha, lw=0,  **kwargs)
+    return plot
+
+
+def _hist(y, ax, **kwargs):
+    plot = []
+    if isinstance(ax, list):
+        for wi, yi in y.iterrows():
+            if wi>len(ax):
+                warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+                # the histogram of the data
+            num_bins = kwargs.pop('nbins', int(yi.count()**0.5))
+            density = kwargs.pop('density', True)
+            n, bins, patches = ax[(wi)%len(ax)].hist(y, num_bins, density=density)
+            #plot.append(ax[(wi+1)%len(ax)].plot(bins, yi, **kwargs))
+    else:
+        # the histogram of the data
+        num_bins = kwargs.pop('nbins', int(y.count()**0.5))
+        density = kwargs.pop('density', True)
+        plot = ax.hist(y, num_bins, density=density)
+        #plot = ax.plot(bins, y, **kwargs)
+    return plot
+
+
+def _scatter(x, y, xerr, yerr, ax, density = False, **kwargs):
+    plot = []
+    linestyle = kwargs.pop('linestyle', "none")
+    marker = kwargs.pop('marker', 'o')
+    if isinstance(ax, list):
+        # make sure we have two dataframes, not series
+        x = pd.DataFrame(x)
+        y = pd.DataFrame(y)
+        
+        for wi in range(x.shape[1]):
+            xi = x.iloc[:,wi]
+            yi = y.iloc[:,wi]
+            
+            if wi>len(ax):
+                warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+            if density:
+                filt = np.isfinite(xi)*np.isfinite(yi)
+                plot.append(style.KDE_plot(ax[(wi+1)%len(ax)], x[filt],yi[filt], **kwargs))
+            else:
+                if yerr is not None and xerr is not None:
+                    plot.append(ax[(wi)%len(ax)].errorbar(xi, yi, yerr.iloc[:,wi], xerr.iloc[:,wi], linestyle = linestyle, marker = marker, **kwargs))
+                elif yerr is not None:
+                    plot.append(ax[(wi)%len(ax)].errorbar(xi, yi, yerr.iloc[:,wi], xerr.iloc[:,wi], linestyle = linestyle, marker = marker,  **kwargs))
+                else:
+                    plot.append(ax[(wi)%len(ax)].scatter(xi, yi, **kwargs))
+    else:
+        if density:
+            filt = np.isfinite(x)*np.isfinite(y)
+            style.KDE_plot(ax, x[filt],y[filt], **kwargs)
+        else:
+            if yerr is not None:
+                plot = ax.errorbar(x, y, yerr, xerr,  linestyle = linestyle, marker = marker, **kwargs)
+            else:
+                plot = ax.scatter(x, y, **kwargs)
+    return plot
+
 
 class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
@@ -70,30 +144,42 @@ class Worm(PickleDumpLoadMixin):
     #
     #######################################
 
-    def get_metric(self, key, metric):
-        """return metrics of a data column given by key."""
+    def get_metric(self, key, metric, filterfunction = None):
+        """return metrics of a data column given by key.
+            filterfunction: a callable that returns a boolean for each entry in the series data[key] 
+        """
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
+        tmp = self.data[key]
+        if filterfunction is not None:
+            filtercondition = filterfunction(tmp)
+            tmp = tmp.loc[filtercondition]
         if metric == "mean":
-            return self.data[key].mean()
+            return tmp.mean()
         
         if metric == "std":
-            return self.data[key].std()
+            return tmp.std()
         
         if metric == "N":
-            return self.data[key].size
+            return tmp.count()
         
         if metric == "sem":
-           return self.data[key].std()/np.sqrt(self.data[key].size)
+           return tmp.std()/np.sqrt(tmp.count())
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
     
     
-    def get_aligned_metric(self, key, metric):
+    def get_aligned_metric(self, key, metric, filterfunction = None):
         """get averages across timepoints for a single worm. eg. average across multiple stimuli. 
-        Requires multi_align(self) to be run."""
-        assert len(self.aligned_data )>0, 'Please run Worm.align() or Worm.multi_align() first!'
+        Requires multi_align(self) to be run.
+
+        filterfunction: a callable that returns a boolean for each entry in the series aligned_data[key] 
+        """
+        assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
-        tmp = pd.concat([data[key] for data in self.aligned_data], axis = 1)
+        tmp = self.get_data_aligned(key)
+        if filterfunction is not None:
+            filtercondition = filterfunction(tmp)
+            tmp = tmp.loc[filtercondition]
         if metric == "mean":
             return tmp.mean(axis = 1)
         if metric == "std":
@@ -106,8 +192,10 @@ class Worm(PickleDumpLoadMixin):
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
 
 
-    def get_data(self, key = None):
-        """return a column of data or the whole pandas dataframe."""
+    def get_data(self, key = None, aligned = False):
+        """return a column of data with name 'key' or the whole pandas dataframe."""
+        if aligned:
+            self.get_data_aligned(key)
         if key == None:
             return self.data
         else:
@@ -115,13 +203,14 @@ class Worm(PickleDumpLoadMixin):
             return self.data[key]
 
 
-    def get_data_aligned(self, index, key = None):
-        """return a column of aigned data or the whole aligned pandas dataframe at a specific timepoints."""
+    def get_data_aligned(self, key = None):
+        """return a column of aligned data or the whole aligned pandas dataframe at a specific timepoints."""
+        assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
         if key == None:
-            return self.data
+            return self.aligned_data
         else:
             assert key in self.data.columns, f'The key {key} does not exist in the data.'
-            return self.data[key]
+            return pd.concat([data.loc[:,key] for data in self.aligned_data], axis = 1)
 
 
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
@@ -141,6 +230,7 @@ class Worm(PickleDumpLoadMixin):
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
+
 
     def calculate_reversals(self, animal_size, angle_treshold):
         """Adaptation of the Hardaker's method to detect reversal event. 
@@ -187,7 +277,7 @@ class Worm(PickleDumpLoadMixin):
                 key is a string or list of strings as column names.
         Output: creates a list of aligned dataframes centered around the timepoint 
         """
-        if key == None:
+        if key is None:
             key = self.data.columns
         tstart, tend = timepoint -tau_before, timepoint+tau_after
         tmp = self.data.loc[tstart:tend, key]
@@ -203,16 +293,15 @@ class Worm(PickleDumpLoadMixin):
                 tau_before: number of frames before timepoint
                 tau_after: number of frames after timepoint
                 key is a string or list of strings as column names.
-        Output: creates a list of aligned dataframes centered around the timepoint 
+        Output: creates a dictionary of aligned dataframes centered around the timepoint 
         """
         self.aligned_data = []
         self.timepoints = timepoints
         if key == None:
             key = self.data.columns
         for timepoint in self.timepoints:
-            tmp = self.align(timepoint,  tau_before, tau_after, key = None)
+            tmp = self.align(timepoint,  tau_before, tau_after, key)
             self.aligned_data.append(tmp)
-
 
     def calculate_count_rate(self, window):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
@@ -301,13 +390,25 @@ class Experiment(PickleDumpLoadMixin):
     def align_data(self, timepoints, tau_before, tau_after, key = None):
         """calculate aligned data for all worms"""
         for worm in self.samples:
-            worm.multi_align(timepoints, tau_before, tau_after, key = None)
+            worm.multi_align(timepoints, tau_before, tau_after, key = key)
 
 
     def calculate_reversals(self, animal_size, angle_treshold):
         """calculate the reversals for each worm"""
         for worm in self.samples:
             worm.calculate_reversals(animal_size, angle_treshold)
+    
+
+    def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95):
+        """calculate the reversals for each worm"""
+        for worm in self.samples:
+            worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity)
+    
+
+    def calculate_count_rate(self, window):
+        """calculate the reversals for each worm"""
+        for worm in self.samples:
+            worm.calculate_count_rate(window)
     ######################################
     #
     #   get/set attributes
@@ -315,7 +416,7 @@ class Experiment(PickleDumpLoadMixin):
     #######################################
     def set_color(self, color):
         """sets the color used for plotting this experiment. Can be a defined color string or hex-code.
-            Anything that matlab understands is valid.
+            Anything that matplotlib understands is valid.
         """
         self.color = color
 
@@ -327,159 +428,148 @@ class Experiment(PickleDumpLoadMixin):
         return self.samples[N]
 
 
-    def get_sample_metric(self, key, metric = None):
-        """ Metrics across samples as a function of time.
+    def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = False):
+        """ Metrics across samples as a function of time (axis=1) or averaged over time a function of samples (axis = 0).
+            metric: one of 'mean', 'std', 'N' or 'sem.'
+            filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
+            axis: axis = 1 - returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged/metric of each sample in the data.
+
         """
         tmp = []
         for worm in self.samples:
             tmp.append(worm.get_data(key))
-        tmp = pd.concat(tmp, axis = 1)
+        tmp = pd.concat(tmp, axis = 1, ignore_index = ignore_index)
+        if filterfunction is not None:
+            filtercondition = tmp.apply(filterfunction)
+            tmp = tmp.loc[:,filtercondition]
         if metric ==None:
             return tmp
         if metric == "mean":
-            return tmp.mean(axis = 1)
+            return tmp.mean(axis = axis)
         if metric == "std":
-            return tmp.std(axis = 1)
+            return tmp.std(axis = axis)
         if metric == "N":
-            return tmp.count(axis = 1)
+            return tmp.count(axis = axis)
         if metric == "sem":
-           return tmp.std(axis = 1)/np.sqrt(len(self))
+           return tmp.std(axis = axis)/self.get_sample_metric(key, 'N', axis=axis)**0.5
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
 
 
-    def get_sample_metric_aligned(self, key, metric):
-        """ Metrics across samples as a function of time. Uses stimulus/timepoint aligned data.
+    def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None):
+        """ Metrics across samples. 
+            metric_sample is the function applied across the worms in this experiment.
+            metric_timepoints is the function applied across stimuli (this is trivial if only one time alignment existed.)
+            filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
+            e.g. get_aligned_sample_metric('velocity', 'mean', 'mean') would return the mean(mean(v, N_timepoints), N_worms).
+
         """
         tmp = []
         for worm in self.samples:
-            tmp.append(worm.get_data(key))
+            # if we give no metric, all stimuli will be attached.
+            if metric_timepoints == None:
+                tmp.append(worm.get_data_aligned(key))
+                #tmp = pd.concat(tmp, axis = 1)
+            else:
+                tmp.append(worm.get_aligned_metric(key, metric_timepoints))
         tmp = pd.concat(tmp, axis = 1)
-        if metric ==None:
+
+        if filterfunction is not None:
+            filtercondition = tmp.apply(filterfunction)
+            tmp = tmp.loc[:,filtercondition]
+        if metric_sample ==None:
             return tmp
-        if metric == "mean":
+        if metric_sample == "mean":
             return tmp.mean(axis = 1)
-        if metric == "std":
+        if metric_sample == "std":
             return tmp.std(axis = 1)
-        if metric == "N":
+        if metric_sample == "N":
             return tmp.count(axis = 1)
-        if metric == "sem":
-           return tmp.std(axis = 1)/np.sqrt(len(self))
+        if metric_sample == "sem":
+           return tmp.std(axis = 1)/self.get_aligned_sample_metric(key, 'N')**0.5
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
-
-
-
     ######################################
     #
     #   Plotting functions
     #
     #######################################
-    def plot_2d(self, key1, key2, ax, average = True, plot_type = 'line', **kwargs):
-        """plot any x-y scatter or correlation.
-            Inputs:
-                key1: string, column of data in the Worm object.
-                key2: string, column of data in the Worm object.
-                ax: either matplotlib axis object or list of axes
-                average: if true, plot the sample means of each key
+
+    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False,  **kwargs):
+        """plot the experiment.
+            keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
+            metric_sample: is the function applied across the worms in this experiment.
+            metric: is the function applied across time (or stimuli for aligned data)
+            filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
+            aligned: Use self.samples.aligned_data or self.samples.data
+            ax: either matplotlib axis object or list of axes
+            metric: if true, plot the sample metric of each key
         """
-        #each worm sample in a subplot
-        if isinstance(ax, list):
-            for wi, worm in enumerate(self.samples):
-                if wi>len(ax):
-                    warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
-                ax[(wi+1)%len(ax)].plot(worm.get_data(key1), worm.get_data(key2), color = self.color, **kwargs)
+        if isinstance(keys, list) or isinstance(keys, tuple):
+            key_x, key_y = keys[:2]
+        elif isinstance(keys, str):
+            key_y = keys
+            key_x = 'time'
         else:
-            # time averaged data in a single subplot 
-            if average:
-                y1 = self.get_sample_metric(key1, metric = 'mean')
-                y2 = self.get_sample_metric(key2, metric = 'mean')
-                ax.plot(y1, y2, color = self.color, **kwargs)
-            # all individual samples in one subplot
-            else:
-                for wi, worm in enumerate(self.samples):
-                    ax.plot(worm.get_data(key1), worm.get_data(key2), **kwargs)
-
-
-    def plot_kde(self, key1, key2, ax, average = True,  **kwargs):
-        """plot a kernel-density estimate for two variables.
-            Inputs:
-                key1: string, column of data in the Worm object.
-                key2: string, column of data in the Worm object.
-                ax: either matplotlib axis object or list of axes
-                average: if true, plot the sample means of each key
-        """
-        #each worm sample in a subplot
-        if isinstance(ax, list):
-            for wi, worm in enumerate(self.samples):
-                if wi>len(ax):
-                    warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
-                    x, y = worm.get_data(key1), worm.get_data(key2)
-                    filt = np.where(np.isfinite(x)*np.isfinite(y))
-                    style.KDE_plot(ax[(wi+1)%len(ax)], x.loc[filt],y.loc[filt], color = self.color, **kwargs)
+            raise ValueError(f'The entry for keys {keys} is not valid.')
+        xerr = None
+        yerr = None
+        if aligned:
+            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction)
+            y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction)
+            if metric_error is not None:
+                xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction)
+                yerr = self.get_aligned_sample_metric(key_y, metric_error, metric, filterfunction)
         else:
-            # time averaged data in a single subplot 
-            if average:
-                x = self.get_sample_metric(key1, metric = 'mean')
-                y = self.get_sample_metric(key2, metric = 'mean')
-                filt = np.where(np.isfinite(x)*np.isfinite(y))
-                style.KDE_plot(ax, x.loc[filt],y.loc[filt], color = self.color, **kwargs)
-            # all individual samples in one subplot
+            if metric == None and metric_sample == None:
+                # return the full joined data array of all samples
+                x = self.get_sample_metric(key_x, None, filterfunction)
+                y = self.get_sample_metric(key_y, None, filterfunction)
+            elif metric_sample == None:
+                # return metric for each worm - result will be Nsamples long
+                x = self.get_sample_metric(key_x, metric, filterfunction, axis = 0)
+                y = self.get_sample_metric(key_y, metric, filterfunction, axis = 0)
+                if metric_error is not None:
+                    xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis = 0)
+                    yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis = 0)
+            elif metric == None:
+                # return the metric across each trajectory(Worm) - result will be an average across samples
+                warnings.warn('This option keeps the dataframe index while applying the sample metric which is rarely meaningful. You probably want to align all datasets to their t=0 and rerun with the aligned option.')
+                x = self.get_sample_metric(key_x, metric_sample, filterfunction, axis = 1)
+                y = self.get_sample_metric(key_y, metric_sample, filterfunction, axis = 1)
+                if metric_error is not None:
+                    xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis = 1)
+                    yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis = 1)
             else:
-                for wi, worm in enumerate(self.samples):
-                    x, y = worm.get_data(key1), worm.get_data(key2)
-                    filt = np.where(np.isfinite(x)*np.isfinite(y))
-                    style.KDE_plot(ax, x.loc[filt],y.loc[filt], **kwargs)
-
-
-    def plot_timeseries(self, key, ax, average = True, error = 'sem', **kwargs):
-        """plot a property as a function of time.
-        Inputs:
-            key is a column name in the Worm object.
-            ax is the matplotlib axis to plot in, if a list of axes we will plot into each separately.
-            average: average all data
-        """
-        # each timeseries in a subplot
-        if isinstance(ax, list):
-            for wi, worm in enumerate(self.samples):
-                if wi>len(ax):
-                    raise Warning('Too few subplots detected. Multiple samples will be plotted in a subplot.')
-                ax[(wi+1)%len(ax)].plot(worm.data(key), color = self.color, **kwargs)
-        else:
-            # average across samples
-            if average:
-                y = self.get_sample_metric(key, metric = 'mean')
-                ax.plot(y, color = self.color, **kwargs)
-                # add error band
-                if error:
-                    yerr = self.get_sample_metric(key, metric = error)
-                    ax.fill_between(y.index, y-yerr, y+yerr, color = self.color, alpha = 0.5)
-            # all individual lines but in one subplot
-            else:
-                for wi, worm in enumerate(self.samples):
-                    ax.plot(worm.data(key), color = self.color, **kwargs)
+                warnings.warn('Pick either a sample or timeseries metric. Both reducing operations are not meaningful to plot.')
+                return None, None, None
+        # check if user overrode color keyword
+        kwargs['color'] =  kwargs.pop('color', self.color)
         
+        if plot_type == 'line':
+            plot = _lineplot(x ,y, yerr, ax, **kwargs)
 
-    def plot_averages(self, key, ax, loc = 0, plot_style = 'box',  **kwargs):
-        """plot average of a key for a sample (Worm).
-        Inputs:
-            key is a column name in the Worm object.
-            ax is the matplotlib axis to plot in, if a list of axes we will plot into each separately.
-            plot_style: one of ('box', 'bar') boxplot or barplot.
-            loc: xlocation of the plot to allow adding multiple conditions in one.
-            **kwargs: gets passed onto Worm.get_metric
-        """
-        tmpdata = []
-        for worm in self.samples:
-            metric = 'mean'
-            # check if user gave us a different metric
-            if 'metric' in kwargs:
-                metric = kwargs['metric']
-            tmpdata.append(worm.get_metric(key, metric))
-        # plot boxplot
-        if plot_style == 'box':
-            style.scatterBoxplot(ax, [loc], [tmpdata], [self.color], [self.strain], **kwargs)
-        elif plot_style == 'bar':
-            ax.bar(loc, tmpdata, color = self.color, label = self.strain)
+        elif plot_type == 'histogram':
+            plot = _hist(y, ax , **kwargs)
 
-        
+        elif plot_type == 'scatter':
+            plot = _scatter(x, y, None, yerr, ax, density = False, **kwargs)
+
+        elif plot_type == 'density':
+            plot = _scatter(x, y, xerr, yerr,  ax, density = True, **kwargs)
+
+        elif plot_type == 'xy_error_scatter':
+            plot = _scatter(x, y, xerr, yerr, ax, density = False, **kwargs)
+
+        elif plot_type == 'bar':
+            print("Don't use bar plots! Really? beautiful boxplots await with plot_type = 'box'")
+            loc = kwargs.pop('loc', 0)
+            plot = ax.bar(loc, y, label = self.strain, **kwargs)
+
+        elif plot_type == 'box':
+            loc = kwargs.pop('loc', 0)
+            color = kwargs.pop('color', self.color)
+            plot = style.scatterBoxplot(ax, [loc], [y], [color], [self.strain], **kwargs)
+        else:
+             raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
+        return plot, x, y

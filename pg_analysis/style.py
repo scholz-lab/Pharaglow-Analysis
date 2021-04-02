@@ -197,18 +197,20 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1):
 
 def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, **kwargs) : 
     """nice boxplots with scatter"""
+    
     if dx==None and len(y_data)>1:
         dx = np.min(np.diff(x_data))
     lw = 1.5
     for xd, yd, cl in zip(x_data, y_data, clrs) :
         if cl is None:
             cl = 'C0'
+        outline_color = kwargs.pop('color', cl)
         bp = ax.boxplot(yd, positions=[xd], widths = 0.2*dx, \
                         notch=False, patch_artist=True)
-        for item in ['boxes', 'whiskers', 'fliers', 'medians', 'caps']:
-            plt.setp(bp[item], color=cl, **kwargs)
-        for item in ['medians', 'caps']:
-            plt.setp(bp[item],linewidth=lw)
+        for item in ['boxes', 'fliers', 'caps']:
+            plt.setp(bp[item], color=cl, alpha = 0.5, **kwargs)
+        for item in ['medians', 'whiskers', 'caps']:
+            plt.setp(bp[item],linewidth=lw, color=outline_color)
         for flier in bp['fliers']:
             flier.set(marker='+', color=cl, alpha=1.0)            
         
