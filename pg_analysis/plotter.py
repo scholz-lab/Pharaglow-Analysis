@@ -48,7 +48,7 @@ def _hist(y, ax, **kwargs):
             n, bins, patches = ax[(wi)%len(ax)].hist(yi, num_bins, density=density)
             #plot.append(ax[(wi+1)%len(ax)].plot(bins, yi, **kwargs))
     else:
-        if y.shape>1:
+        if len(y.columns)>1:
             # if more than one dataset
             for wi in range(y.shape[1]):
                 yi = y.iloc[:,wi]
