@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
-
+import numpy
 from . import style
 from .tools import PickleDumpLoadMixin
 from pharaglow import io, extract
@@ -14,7 +14,7 @@ from pharaglow import io, extract
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
     if isinstance(ax, list):
-        for wi, xi in x.iterrows():
+        for wi, xi in x.iteritems():
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
             plot.append(ax[(wi+1)%len(ax)].plot(xi, y.iloc[wi], **kwargs))
@@ -32,7 +32,7 @@ def _lineplot(x ,y, yerr, ax, **kwargs):
 def _hist(y, ax, **kwargs):
     plot = []
     if isinstance(ax, list):
-        for wi, yi in y.iterrows():
+        for wi, yi in y.iteritems():
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
                 # the histogram of the data
