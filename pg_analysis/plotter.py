@@ -14,6 +14,8 @@ from pharaglow import io, extract
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
     if isinstance(ax, list):
+        x = pd.DataFrame(x)
+        y = pd.DataFrame(y)
         for wi in range(x.shape[1]):
             xi = x.iloc[:,wi]
             yi = y.iloc[:,wi]
@@ -34,6 +36,7 @@ def _lineplot(x ,y, yerr, ax, **kwargs):
 
 def _hist(y, ax, **kwargs):
     plot = []
+    y = pd.DataFrame(y)
     if isinstance(ax, list):
         for wi in range(y.shape[1]):
             yi = y.iloc[:,wi]
@@ -45,7 +48,7 @@ def _hist(y, ax, **kwargs):
             n, bins, patches = ax[(wi)%len(ax)].hist(yi, num_bins, density=density)
             #plot.append(ax[(wi+1)%len(ax)].plot(bins, yi, **kwargs))
     else:
-        if y.shape[1]>1:
+        if y.shape>1:
             # if more than one dataset
             for wi in range(y.shape[1]):
                 yi = y.iloc[:,wi]
