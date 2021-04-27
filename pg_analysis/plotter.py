@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
-
+import numpy
 from . import style
 from .tools import PickleDumpLoadMixin
 from pharaglow import io, extract
@@ -14,13 +14,18 @@ from pharaglow import io, extract
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
     if isinstance(ax, list):
-        for wi, xi in x.iterrows():
+        x = pd.DataFrame(x)
+        y = pd.DataFrame(y)
+        for wi in range(x.shape[1]):
+            xi = x.iloc[:,wi]
+            yi = y.iloc[:,wi]
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
-            plot.append(ax[(wi+1)%len(ax)].plot(xi, y.iloc[wi], **kwargs))
+            plot.append(ax[(wi)%len(ax)].plot(xi, yi, **kwargs))
             if yerr is not None:
+                yerr_i = yerr.iloc[:,wi]
                 alpha = kwargs.pop('alpha', 0.5)
-                ax[(wi)%len(ax)].fill_between(xi, y-yerr.values, y+yerr.values, alpha = alpha, **kwargs)
+                ax[(wi)%len(ax)].fill_between(xi, yi-yerr_i.values, yi+yerr_i.values, alpha = alpha, **kwargs)
     else:
         plot = ax.plot(x, y, **kwargs)
         if yerr is not None:
@@ -31,21 +36,32 @@ def _lineplot(x ,y, yerr, ax, **kwargs):
 
 def _hist(y, ax, **kwargs):
     plot = []
+    y = pd.DataFrame(y)
     if isinstance(ax, list):
-        for wi, yi in y.iterrows():
+        for wi in range(y.shape[1]):
+            yi = y.iloc[:,wi]
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
                 # the histogram of the data
             num_bins = kwargs.pop('nbins', int(yi.count()**0.5))
             density = kwargs.pop('density', True)
-            n, bins, patches = ax[(wi)%len(ax)].hist(y, num_bins, density=density)
+            n, bins, patches = ax[(wi)%len(ax)].hist(yi, num_bins, density=density)
             #plot.append(ax[(wi+1)%len(ax)].plot(bins, yi, **kwargs))
     else:
-        # the histogram of the data
-        num_bins = kwargs.pop('nbins', int(y.count()**0.5))
-        density = kwargs.pop('density', True)
-        plot = ax.hist(y, num_bins, density=density)
-        #plot = ax.plot(bins, y, **kwargs)
+        if len(y.columns)>1:
+            # if more than one dataset
+            for wi in range(y.shape[1]):
+                yi = y.iloc[:,wi]
+                # the histogram of the data
+                num_bins = kwargs.pop('nbins', int(yi.count()**0.5))
+                density = kwargs.pop('density', True)
+                n, bins, patches = ax.hist(yi, num_bins, density=density)
+        else:
+            # the histogram of the data
+            num_bins = kwargs.pop('nbins', int(y.count()**0.5))
+            density = kwargs.pop('density', True)
+            plot = ax.hist(y, num_bins, density=density)
+            #plot = ax.plot(bins, y, **kwargs)
     return plot
 
 
