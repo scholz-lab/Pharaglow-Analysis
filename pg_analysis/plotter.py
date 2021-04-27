@@ -270,7 +270,7 @@ class Worm(PickleDumpLoadMixin):
             ## reset peaks to match frame
             #peaks += np.min(self.data.frame)
             # add interpolated pumping rate to dataframe
-            self.data['rate'] = np.interp(self.data['frame'], peaks[:-1], self.fps/np.diff(peaks))
+            self.data['rate'] = np.interp(self.data.index, peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
             self.data['pump_events'] = 0
             self.data.loc[peaks,['pump_events']] = 1
