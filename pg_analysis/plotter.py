@@ -102,6 +102,35 @@ def _scatter(x, y, xerr, yerr, ax, density = False, **kwargs):
     return plot
 
 
+def _heatmap(x, y, ax, **kwargs):
+    plot = []
+    x = pd.DataFrame(x)
+    y = pd.DataFrame(y)
+    if isinstance(ax, list):
+        for wi in range(y.shape[1]):
+            yi = y.iloc[:,wi]
+            yi = pd.DataFrame(yi)
+            xi = x.iloc[:,wi]
+            if wi>len(ax):
+                warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+                # a heatmap of the data
+            im = ax[(wi)%len(ax)].imshow(yi.values.T, **kwargs)
+            # reset xlimits
+            extent = im.get_extent()
+            xmin, xmax = np.min(xi), np.max(xi)
+            im.set_extent([xmin, xmax,extent[2], extent[3]])
+            plot.append(im)
+    else:
+        # a heatmap of the data
+        im = ax.imshow(y.values.T, **kwargs)
+        extent = im.get_extent()
+        xmin, xmax = np.min(x).values, np.max(x).values
+        im.set_extent([xmin, xmax, extent[2], extent[3]])
+        plot.append(im)
+    return plot
+
+
+
 class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
     def __init__(self, filename, columns,fps, scale, **kwargs):
@@ -122,6 +151,8 @@ class Worm(PickleDumpLoadMixin):
         traj = io.load(filename, orient='split')
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
+        # set to a numerical index - need this for later
+        traj.reset_index(drop=True)
         # velocity and real time
         traj['time'] = traj['frame']/fps
         #print(traj.info())
@@ -236,8 +267,8 @@ class Worm(PickleDumpLoadMixin):
         self.data['pump_clean'],_ = extract.preprocess(self.data['pump_clean'], w_bg, w_sm)
         peaks, _,_  = extract.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity)
         if len(peaks)>0:
-            # reset peaks to match frame
-            peaks += np.min(self.data.frame)
+            ## reset peaks to match frame
+            #peaks += np.min(self.data.frame)
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(self.data['frame'], peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
@@ -576,6 +607,9 @@ class Experiment(PickleDumpLoadMixin):
 
         elif plot_type == 'xy_error_scatter':
             plot = _scatter(x, y, xerr, yerr, ax, density = False, **kwargs)
+
+        elif plot_type == 'raster' or plot_type == 'heatmap':
+            plot = _heatmap(y, **kwargs)
 
         elif plot_type == 'bar':
             print("Don't use bar plots! Really? beautiful boxplots await with plot_type = 'box'")
