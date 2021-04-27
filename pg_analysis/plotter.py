@@ -151,8 +151,7 @@ class Worm(PickleDumpLoadMixin):
         traj = io.load(filename, orient='split')
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
-        # set to a numerical index - need this for later
-        traj.reset_index(drop=True)
+        #
         # velocity and real time
         traj['time'] = traj['frame']/fps
         #print(traj.info())
@@ -269,6 +268,8 @@ class Worm(PickleDumpLoadMixin):
         if len(peaks)>0:
             ## reset peaks to match frame
             #peaks += np.min(self.data.frame)
+            # set to a numerical index - need this for later
+            traj.reset_index(drop=True)
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(self.data.index, peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
@@ -277,6 +278,7 @@ class Worm(PickleDumpLoadMixin):
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
+        self.data.set_index('frame')
 
 
     def calculate_reversals(self, animal_size, angle_treshold):
@@ -326,6 +328,8 @@ class Worm(PickleDumpLoadMixin):
         """
         if key is None:
             key = self.data.columns
+        self.data.set_index('frame')
+        # ensure the index is the 'frame' column
         tstart, tend = timepoint -tau_before, timepoint+tau_after
         tmp = self.data.loc[tstart:tend, key]
         tmp = tmp.reindex(pd.Index(np.arange(tstart, tend)))
