@@ -176,8 +176,9 @@ class Worm(PickleDumpLoadMixin):
              print('Pumping extraction failed. Try with different parameters.')
              self.flag = True
              self.data = traj
-        # ensure numerical index
-        self.data = self.data.reset_index()
+        finally: 
+            # ensure numerical index
+            self.data = self.data.reset_index()
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -332,7 +333,7 @@ class Worm(PickleDumpLoadMixin):
         # create a list of desired elements and then chunk a piece of data around them
         tstart, tend = timepoint -tau_before, timepoint+tau_after
         frames = np.arange(tstart, tend+1)
-        tmp = self.data[self.data[column_align].isin(indices)].loc[:,key]
+        tmp = self.data[self.data[column_align].isin(frames)].loc[:,key]
         # fill missing data
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
