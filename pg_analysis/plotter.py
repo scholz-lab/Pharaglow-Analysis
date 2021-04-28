@@ -2,14 +2,14 @@ import os
 import pickle
 import warnings
 
-
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
-import numpy
+
 from . import style
+from . import tools
 from .tools import PickleDumpLoadMixin
-from pharaglow import io, extract
+
 
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
@@ -102,6 +102,35 @@ def _scatter(x, y, xerr, yerr, ax, density = False, **kwargs):
     return plot
 
 
+def _heatmap(x, y, ax, **kwargs):
+    plot = []
+    x = pd.DataFrame(x)
+    y = pd.DataFrame(y)
+    if isinstance(ax, list):
+        for wi in range(y.shape[1]):
+            yi = y.iloc[:,wi]
+            yi = pd.DataFrame(yi)
+            xi = x.iloc[:,wi]
+            if wi>len(ax):
+                warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+                # a heatmap of the data
+            im = ax[(wi)%len(ax)].imshow(yi.values.T, **kwargs)
+            # reset xlimits
+            extent = im.get_extent()
+            xmin, xmax = np.min(xi), np.max(xi)
+            im.set_extent([xmin, xmax,extent[2], extent[3]])
+            plot.append(im)
+    else:
+        # a heatmap of the data
+        im = ax.imshow(y.values.T, **kwargs)
+        extent = im.get_extent()
+        xmin, xmax = np.min(x).values, np.max(x).values
+        im.set_extent([xmin, xmax, extent[2], extent[3]])
+        plot.append(im)
+    return plot
+
+
+
 class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
     def __init__(self, filename, columns,fps, scale, **kwargs):
@@ -119,9 +148,10 @@ class Worm(PickleDumpLoadMixin):
 
     def _load(self, filename, columns, fps, scale, **kwargs):
         """load data."""
-        traj = io.load(filename, orient='split')
+        traj = pd.read_json(filename, orient='split')
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
+        #
         # velocity and real time
         traj['time'] = traj['frame']/fps
         #print(traj.info())
@@ -146,7 +176,9 @@ class Worm(PickleDumpLoadMixin):
              print('Pumping extraction failed. Try with different parameters.')
              self.flag = True
              self.data = traj
-
+        finally: 
+            # ensure numerical index
+            self.data = self.data.reset_index()
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -232,20 +264,23 @@ class Worm(PickleDumpLoadMixin):
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
-        self.data['pump_clean'] = extract.hampel(self.data['pumps'], w_bg*30)
-        self.data['pump_clean'],_ = extract.preprocess(self.data['pump_clean'], w_bg, w_sm)
-        peaks, _,_  = extract.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity)
+        self.data['pump_clean'] = tools.hampel(self.data['pumps'], w_bg*30)
+        self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
+        # deal with heights for the expected peaks
+        ### here we make the heights sensible: threshold between median and maximum of trace
+        h = np.linspace(self.data['pump_clean'].median(), self.data['pump_clean'].max(), 50)
+        heights = kwargs.pop('heights', h)
+        peaks, _,_  = tools.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
         if len(peaks)>0:
-            # reset peaks to match frame
-            peaks += np.min(self.data.frame)
             # add interpolated pumping rate to dataframe
-            self.data['rate'] = np.interp(self.data['frame'], peaks[:-1], self.fps/np.diff(peaks))
+            self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
             self.data['pump_events'] = 0
             self.data.loc[peaks,['pump_events']] = 1
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
+        
 
 
     def calculate_reversals(self, animal_size, angle_treshold):
@@ -284,7 +319,7 @@ class Worm(PickleDumpLoadMixin):
         self.data.loc[rev,'reversals'] = 1
     
 
-    def align(self, timepoint,  tau_before, tau_after, key = None):
+    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
         """align to a timepoint.
          Inputs:
                 timepoint: time to align to in frames
@@ -295,14 +330,18 @@ class Worm(PickleDumpLoadMixin):
         """
         if key is None:
             key = self.data.columns
+        # create a list of desired elements and then chunk a piece of data around them
         tstart, tend = timepoint -tau_before, timepoint+tau_after
-        tmp = self.data.loc[tstart:tend, key]
-        tmp = tmp.reindex(pd.Index(np.arange(tstart, tend)))
-        tmp.index = pd.Index(np.arange(-tau_before, tau_after))
+        frames = np.arange(tstart, tend+1)
+        tmp = self.data[self.data[column_align].isin(frames)].loc[:,key]
+        # fill missing data
+        tmp = tmp.set_index(column_align)
+        tmp = tmp.reindex(pd.Index(frames))
+        tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
         return tmp
     
 
-    def multi_align(self, timepoints, tau_before, tau_after, key = None):
+    def multi_align(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
         """align to multiple timepoints.
          Inputs:
                 timepoints: list of timepoints to align to in frames
@@ -316,15 +355,16 @@ class Worm(PickleDumpLoadMixin):
         if key == None:
             key = self.data.columns
         for timepoint in self.timepoints:
-            tmp = self.align(timepoint,  tau_before, tau_after, key)
+            tmp = self.align(timepoint,  tau_before, tau_after, key, column_align)
             self.aligned_data.append(tmp)
 
     def calculate_count_rate(self, window, **kwargs):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
         window is in frame. Result will be in Hz."""
-	kwargs['center'] =  kwargs.pop('center', True)
-	kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
+        kwargs['center'] =  kwargs.pop('center', True)
+        kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
         self.data['count_rate'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+
 
     
 class Experiment(PickleDumpLoadMixin):
@@ -335,7 +375,8 @@ class Experiment(PickleDumpLoadMixin):
         self.condition = condition
         self.scale = scale
         self.fps = fps
-
+        # a place for detection parameters, ...
+        self.metadata = {}
         if samples == None:
             self.samples = []
         else:
@@ -413,16 +454,20 @@ class Experiment(PickleDumpLoadMixin):
 
     def calculate_reversals(self, animal_size, angle_treshold):
         """calculate the reversals for each worm"""
+        self.metadata['animal_size'] = animal_size
+        self.metadata['angle_threshold'] = angle_treshold
         for worm in self.samples:
             worm.calculate_reversals(animal_size, angle_treshold)
     
 
     def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95):
-        """calculate the reversals for each worm"""
+        """calculate the pumps for each worm"""
+        for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
+            self.metadata[key] = value
         for worm in self.samples:
             worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity)
     
-    
+
     def calculate_count_rate(self, window,**kwargs):
         """calculate the reversals for each worm"""
         for worm in self.samples:
@@ -578,6 +623,9 @@ class Experiment(PickleDumpLoadMixin):
 
         elif plot_type == 'xy_error_scatter':
             plot = _scatter(x, y, xerr, yerr, ax, density = False, **kwargs)
+
+        elif plot_type == 'raster' or plot_type == 'heatmap':
+            plot = _heatmap(y, **kwargs)
 
         elif plot_type == 'bar':
             print("Don't use bar plots! Really? beautiful boxplots await with plot_type = 'box'")

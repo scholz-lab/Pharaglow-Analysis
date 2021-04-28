@@ -3,9 +3,73 @@ import uuid
 import errno
 import pickle
 
+import numpy as np
+
+
 from collections.abc import Mapping
 from datetime import datetime
 from matplotlib.pylab import style
+from scipy.signal import find_peaks
+
+
+def hampel(vals_orig, k=7, t0=3):
+    '''
+    vals: pandas series of values from which to remove outliers
+    k: size of window (including the sample; 7 is equal to 3 on either side of value)
+    t0: how many sigma away to call it an outlier
+    '''
+    #Make copy so original not edited
+    vals = vals_orig.copy()
+    
+    #Hampel Filter
+    L = 1.4826
+    rolling_median = vals.rolling(window=k, center=True, min_periods = 1).median()
+    MAD = lambda x: np.median(np.abs(x - np.median(x)))
+    rolling_MAD = vals.rolling(window=k, center=True, min_periods=1).apply(MAD)
+    threshold = t0 * L * rolling_MAD
+    difference = np.abs(vals - rolling_median)
+    outlier_idx = difference > threshold
+    vals[outlier_idx] = rolling_median[outlier_idx] 
+    return(vals)
+
+
+def preprocess(p, w_bg, w_sm, win_type_bg = 'hamming', win_type_sm = 'boxcar', **kwargs):
+    """preprocess a trace with rolling window brackground subtraction."""
+    bg = p.rolling(w_bg, min_periods=1, center=True, win_type=win_type_bg).mean()
+    return (p - bg).rolling(w_sm, min_periods=1, center=True, win_type=win_type_sm).mean(), bg
+
+
+def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivity = 0.99, **kwargs):
+    """peak detection in a background subtracted trace assuming real 
+        peaks have to be at least min_distance samples apart."""
+    tmp = []
+    all_peaks = []
+    # find peaks at different heights
+    for h in heights:
+        peaks = find_peaks(p, height = h,threshold = 0.0)[0]
+        tmp.append([len(peaks), np.mean(np.diff(peaks)>=min_distance)])
+        all_peaks.append(peaks)
+    tmp = np.array(tmp)
+    # set the valid peaks score to zero if no peaks are present
+    tmp[:,1][~np.isfinite(tmp[:,1])]= 0
+    # calculate random distribution of peaks in a series of length l (actually we know the intervals will be exponential)
+    null = []
+    l = len(p)
+    for npeaks in tmp[:,0]:
+        locs = np.random.randint(0,l,(500, int(npeaks)))
+        # calculate the random error rate - and its stdev
+        null.append([np.mean(np.diff(np.sort(locs), axis =1)>=min_distance), np.std(np.mean(np.diff(np.sort(locs), axis =1)>=5, axis =1))])
+    null = np.array(null)
+    # now find the best peak level - larger than random, with high accuracy
+    # subtract random level plus 1 std:
+    metric_random = tmp[:,1] - (null[:,0]+null[:,1])
+    # check where this is still positive and where the valid intervals are 1 or some large value
+    valid = np.where((metric_random>0)*(tmp[:,1]>=sensitivity))[0]
+    if len(valid)>0:
+        peaks = all_peaks[valid[np.argmax(tmp[:,0][valid])]]
+    else:
+        return [], tmp, null
+    return peaks, tmp, null
 
 
 class PickleDumpLoadMixin:
