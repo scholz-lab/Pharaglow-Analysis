@@ -2,14 +2,14 @@ import os
 import pickle
 import warnings
 
-
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
-import numpy
+
 from . import style
+from . import tools
 from .tools import PickleDumpLoadMixin
-from pharaglow import io, extract
+
 
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
@@ -148,7 +148,7 @@ class Worm(PickleDumpLoadMixin):
 
     def _load(self, filename, columns, fps, scale, **kwargs):
         """load data."""
-        traj = io.load(filename, orient='split')
+        traj = pd.read_json(filename, orient='split')
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
         #
@@ -262,12 +262,10 @@ class Worm(PickleDumpLoadMixin):
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
-        self.data['pump_clean'] = extract.hampel(self.data['pumps'], w_bg*30)
-        self.data['pump_clean'],_ = extract.preprocess(self.data['pump_clean'], w_bg, w_sm)
-        peaks, _,_  = extract.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity)
+        self.data['pump_clean'] = tools.hampel(self.data['pumps'], w_bg*30)
+        self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
+        peaks, _,_  = tools.find_peaks(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity)
         if len(peaks)>0:
-            ## reset peaks to match frame
-            #peaks += np.min(self.data.frame)
             # set to a numerical index - need this for later
             self.data.reset_index(drop=True)
             # add interpolated pumping rate to dataframe
