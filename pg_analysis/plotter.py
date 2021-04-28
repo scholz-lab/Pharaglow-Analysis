@@ -115,17 +115,10 @@ def _heatmap(x, y, ax, **kwargs):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
                 # a heatmap of the data
             im = ax[(wi)%len(ax)].imshow(yi.values.T, **kwargs)
-            # reset xlimits
-            extent = im.get_extent()
-            xmin, xmax = np.min(xi), np.max(xi)
-            im.set_extent([xmin, xmax,extent[2], extent[3]])
             plot.append(im)
     else:
         # a heatmap of the data
         im = ax.imshow(y.values.T, **kwargs)
-        extent = im.get_extent()
-        xmin, xmax = np.min(x).values, np.max(x).values
-        im.set_extent([xmin, xmax, extent[2], extent[3]])
         plot.append(im)
     return plot
 
