@@ -3,6 +3,8 @@ import uuid
 import errno
 import pickle
 
+import numpy as np
+
 from collections.abc import Mapping
 from datetime import datetime
 from matplotlib.pylab import style
@@ -27,7 +29,7 @@ def hampel(vals_orig, k=7, t0=3):
     outlier_idx = difference > threshold
     vals[outlier_idx] = rolling_median[outlier_idx] 
     return(vals)
-    
+
 
 def preprocess(p, w_bg, w_sm, **kwargs):
     """preprocess a trace with rolling window brackground subtraction."""
