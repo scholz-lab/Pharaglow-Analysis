@@ -264,7 +264,11 @@ class Worm(PickleDumpLoadMixin):
         # remove outliers
         self.data['pump_clean'] = tools.hampel(self.data['pumps'], w_bg*30)
         self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
-        peaks, _,_  = tools.find_peaks(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity)
+        # deal with heights for the expected peaks
+        ### here we make the heights sensible: threshold between median and maximum of trace
+        h = np.linspace(self.data['pump_clean'].median(), self.data['pump_clean'].max(), 50)
+        heights = kwargs.pop('heights', h)
+        peaks, _,_  = tools.find_peaks(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
         if len(peaks)>0:
             # set to a numerical index - need this for later
             self.data.reset_index(drop=True)
