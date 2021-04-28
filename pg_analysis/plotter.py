@@ -554,7 +554,7 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
 
-    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False,  **kwargs, axis):
+    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False,  **kwargs, axis=1):
         """plot the experiment.
             keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
             metric_sample: is the function applied across the worms in this experiment.
