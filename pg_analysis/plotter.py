@@ -271,7 +271,7 @@ class Worm(PickleDumpLoadMixin):
         peaks, _,_  = tools.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
         if len(peaks)>0:
             # set to a numerical index - need this for later
-            self.data.reset_index(drop=True)
+            self.data = self.data.reset_index(drop=True)
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(self.data.index, peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
@@ -280,7 +280,7 @@ class Worm(PickleDumpLoadMixin):
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
-        self.data.set_index('frame')
+        self.data = self.data.set_index('frame')
 
 
     def calculate_reversals(self, animal_size, angle_treshold):
@@ -330,7 +330,7 @@ class Worm(PickleDumpLoadMixin):
         """
         if key is None:
             key = self.data.columns
-        self.data.set_index('frame')
+        self.data = self.data.set_index('frame')
         # ensure the index is the 'frame' column
         tstart, tend = timepoint -tau_before, timepoint+tau_after
         tmp = self.data.loc[tstart:tend, key]
