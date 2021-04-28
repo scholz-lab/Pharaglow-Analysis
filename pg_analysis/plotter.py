@@ -334,7 +334,7 @@ class Worm(PickleDumpLoadMixin):
         # ensure the index is the 'frame' column
         tstart, tend = timepoint -tau_before, timepoint+tau_after
         tmp = self.data.loc[tstart:tend, key]
-        tmp = tmp.reindex(pd.Index(np.arange(tstart, tend)))
+        tmp = tmp.reindex(pd.Index(np.arange(tstart, tend+1)))
         tmp.index = pd.Index(np.arange(-tau_before, tau_after))
         return tmp
     
