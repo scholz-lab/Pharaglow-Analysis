@@ -5,9 +5,12 @@ import pickle
 
 import numpy as np
 
+
 from collections.abc import Mapping
 from datetime import datetime
 from matplotlib.pylab import style
+from scipy.signal import find_peaks
+
 
 def hampel(vals_orig, k=7, t0=3):
     '''
@@ -15,7 +18,6 @@ def hampel(vals_orig, k=7, t0=3):
     k: size of window (including the sample; 7 is equal to 3 on either side of value)
     t0: how many sigma away to call it an outlier
     '''
-    
     #Make copy so original not edited
     vals = vals_orig.copy()
     
@@ -37,7 +39,7 @@ def preprocess(p, w_bg, w_sm, **kwargs):
     return (p - bg).rolling(w_sm, min_periods=1, center=True, win_type='parzen').mean(), bg
 
 
-def find_peaks(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivity = 0.99, **kwargs):
+def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivity = 0.99, **kwargs):
     """peak detection in a background subtracted trace assuming real 
         peaks have to be at least min_distance samples apart."""
     tmp = []

@@ -268,7 +268,7 @@ class Worm(PickleDumpLoadMixin):
         ### here we make the heights sensible: threshold between median and maximum of trace
         h = np.linspace(self.data['pump_clean'].median(), self.data['pump_clean'].max(), 50)
         heights = kwargs.pop('heights', h)
-        peaks, _,_  = tools.find_peaks(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
+        peaks, _,_  = tools.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
         if len(peaks)>0:
             # set to a numerical index - need this for later
             self.data.reset_index(drop=True)
