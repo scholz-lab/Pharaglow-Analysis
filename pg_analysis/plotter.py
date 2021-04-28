@@ -551,6 +551,8 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.count(axis = 1)
         if metric_sample == "sem":
            return tmp.std(axis = 1)/self.get_aligned_sample_metric(key, 'N')**0.5
+        if metric_sample == "collapse":
+            return pd.DataFrame(tmp.values.ravel())
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
     ######################################
@@ -626,6 +628,7 @@ class Experiment(PickleDumpLoadMixin):
             plot = _scatter(x, y, xerr, yerr, ax, density = False, **kwargs)
 
         elif plot_type == 'raster' or plot_type == 'heatmap':
+            color = kwargs.pop('color')
             plot = _heatmap(x, y, ax, **kwargs)
 
         elif plot_type == 'bar':
