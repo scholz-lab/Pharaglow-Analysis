@@ -319,10 +319,10 @@ class Worm(PickleDumpLoadMixin):
             tmp = self.align(timepoint,  tau_before, tau_after, key)
             self.aligned_data.append(tmp)
 
-    def calculate_count_rate(self, window):
+    def calculate_count_rate(self, window, ***kwargs):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
         window is in frame. Result will be in Hz."""
-        self.data['count_rate'] = self.data['pump_events'].rolling(window, center=True, min_periods=1).sum()/window*self.fps
+        self.data['count_rate'] = self.data['pump_events'].rolling(window).sum()/window*self.fps
 
     
 class Experiment(PickleDumpLoadMixin):
@@ -420,11 +420,11 @@ class Experiment(PickleDumpLoadMixin):
         for worm in self.samples:
             worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity)
     
-
-    def calculate_count_rate(self, window):
+    
+    def calculate_count_rate(self, window,**kwargs):
         """calculate the reversals for each worm"""
         for worm in self.samples:
-            worm.calculate_count_rate(window)
+            worm.calculate_count_rate(window,**kwargs)
     ######################################
     #
     #   get/set attributes
