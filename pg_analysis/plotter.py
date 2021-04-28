@@ -470,6 +470,7 @@ class Experiment(PickleDumpLoadMixin):
 
     def calculate_count_rate(self, window,**kwargs):
         """calculate the reversals for each worm"""
+        self.metadata['count_rate_window'] = window
         for worm in self.samples:
             worm.calculate_count_rate(window,**kwargs)
     ######################################
@@ -625,7 +626,7 @@ class Experiment(PickleDumpLoadMixin):
             plot = _scatter(x, y, xerr, yerr, ax, density = False, **kwargs)
 
         elif plot_type == 'raster' or plot_type == 'heatmap':
-            plot = _heatmap(y, **kwargs)
+            plot = _heatmap(x, y, ax, **kwargs)
 
         elif plot_type == 'bar':
             print("Don't use bar plots! Really? beautiful boxplots await with plot_type = 'box'")
