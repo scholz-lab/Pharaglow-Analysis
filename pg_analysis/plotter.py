@@ -359,7 +359,7 @@ class Worm(PickleDumpLoadMixin):
     def calculate_count_rate(self, window):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
         window is in frame. Result will be in Hz."""
-        self.data['count_rate'] = self.data['pump_events'].rolling(window, center=True, min_periods=1).sum()/window*self.fps
+        self.data['count_rate'] = self.data['pump_events'].rolling(window, center=True, min_periods=1).mean()/self.fps
 
     
 class Experiment(PickleDumpLoadMixin):
@@ -370,7 +370,8 @@ class Experiment(PickleDumpLoadMixin):
         self.condition = condition
         self.scale = scale
         self.fps = fps
-
+        # a place for detection parameters, ...
+        self.metadata = {}
         if samples == None:
             self.samples = []
         else:
@@ -448,18 +449,23 @@ class Experiment(PickleDumpLoadMixin):
 
     def calculate_reversals(self, animal_size, angle_treshold):
         """calculate the reversals for each worm"""
+        self.metadata['animal_size'] = animal_size
+        self.metadata['angle_threshold'] = angle_treshold
         for worm in self.samples:
             worm.calculate_reversals(animal_size, angle_treshold)
     
 
     def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95):
-        """calculate the reversals for each worm"""
+        """calculate the pumps for each worm"""
+        for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
+            self.metadata[key] = value
         for worm in self.samples:
             worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity)
     
 
     def calculate_count_rate(self, window):
-        """calculate the reversals for each worm"""
+        """calculate the count rate for each worm"""
+        self.metadata['count_rate_window'] = window
         for worm in self.samples:
             worm.calculate_count_rate(window)
     ######################################
