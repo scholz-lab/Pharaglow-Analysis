@@ -176,7 +176,8 @@ class Worm(PickleDumpLoadMixin):
              print('Pumping extraction failed. Try with different parameters.')
              self.flag = True
              self.data = traj
-
+        # ensure numerical index
+        self.data = self.data.reset_index()
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -274,11 +275,11 @@ class Worm(PickleDumpLoadMixin):
             self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
             self.data['pump_events'] = 0
-            self.data.loc[peaks,['pump_events']] = 1
+            self.data.iloc[peaks,['pump_events']] = 1
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
-        self.data = self.data.set_index('frame')
+        
 
 
     def calculate_reversals(self, animal_size, angle_treshold):
@@ -317,7 +318,7 @@ class Worm(PickleDumpLoadMixin):
         self.data.loc[rev,'reversals'] = 1
     
 
-    def align(self, timepoint,  tau_before, tau_after, key = None):
+    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
         """align to a timepoint.
          Inputs:
                 timepoint: time to align to in frames
@@ -328,13 +329,13 @@ class Worm(PickleDumpLoadMixin):
         """
         if key is None:
             key = self.data.columns
-        self.data = self.data.set_index('frame')
-        # ensure the index is the 'frame' column
+        # create a list of desired elements and then chunk a piece of data around them
         tstart, tend = timepoint -tau_before, timepoint+tau_after
-        indices = np.arange(tstart, tend+1)
-        tmp = self.data.loc[self.data.index.intersection(indices), key]
+        frames = np.arange(tstart, tend+1)
+        tmp = self.data[self.data[column_align].isin(indices)].loc[:,key]
         # fill missing data
-        tmp = tmp.reindex(pd.Index(indices))
+        tmp = tmp.set_index(column_align)
+        tmp = tmp.reindex(pd.Index(frames))
         tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
         return tmp
     
