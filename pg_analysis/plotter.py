@@ -341,7 +341,7 @@ class Worm(PickleDumpLoadMixin):
         return tmp
     
 
-    def multi_align(self, timepoints, tau_before, tau_after, key = None):
+    def multi_align(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
         """align to multiple timepoints.
          Inputs:
                 timepoints: list of timepoints to align to in frames
@@ -355,7 +355,7 @@ class Worm(PickleDumpLoadMixin):
         if key == None:
             key = self.data.columns
         for timepoint in self.timepoints:
-            tmp = self.align(timepoint,  tau_before, tau_after, key)
+            tmp = self.align(timepoint,  tau_before, tau_after, key, column_align)
             self.aligned_data.append(tmp)
 
     def calculate_count_rate(self, window):
