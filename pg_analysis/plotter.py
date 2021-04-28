@@ -276,7 +276,7 @@ class Worm(PickleDumpLoadMixin):
             self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
             self.data['pump_events'] = 0
-            self.data.iloc[peaks,['pump_events']] = 1
+            self.data.loc[peaks,['pump_events']] = 1
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
