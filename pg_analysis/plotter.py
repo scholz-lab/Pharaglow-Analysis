@@ -513,7 +513,7 @@ class Experiment(PickleDumpLoadMixin):
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
 
 
-    def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None):
+    def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
         """ Metrics across samples. 
             metric_sample is the function applied across the worms in this experiment.
             metric_timepoints is the function applied across stimuli (this is trivial if only one time alignment existed.)
@@ -537,13 +537,13 @@ class Experiment(PickleDumpLoadMixin):
         if metric_sample ==None:
             return tmp
         if metric_sample == "mean":
-            return tmp.mean(axis = 1)
+            return tmp.mean(axis = axis)
         if metric_sample == "std":
-            return tmp.std(axis = 1)
+            return tmp.std(axis = axis)
         if metric_sample == "N":
-            return tmp.count(axis = 1)
+            return tmp.count(axis = axis)
         if metric_sample == "sem":
-           return tmp.std(axis = 1)/self.get_aligned_sample_metric(key, 'N')**0.5
+           return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
             return pd.DataFrame(tmp.values.ravel())
         else:
@@ -554,7 +554,7 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
 
-    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False,  **kwargs):
+    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False,  **kwargs, axis):
         """plot the experiment.
             keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
             metric_sample: is the function applied across the worms in this experiment.
@@ -574,8 +574,10 @@ class Experiment(PickleDumpLoadMixin):
         xerr = None
         yerr = None
         if aligned:
-            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction)
-            y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction)
+            
+            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
+            y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
+                
             if metric_error is not None:
                 xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction)
                 yerr = self.get_aligned_sample_metric(key_y, metric_error, metric, filterfunction)
