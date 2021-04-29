@@ -190,7 +190,7 @@ class Worm(PickleDumpLoadMixin):
             filterfunction: a callable that returns a boolean for each entry in the series data[key] 
         """
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
-        tmp = self.data[key]
+        tmp = self.data.set_index('frame')[key]
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
             tmp = tmp.loc[filtercondition]
@@ -238,10 +238,10 @@ class Worm(PickleDumpLoadMixin):
         if aligned:
             self.get_data_aligned(key)
         if key == None:
-            return self.data
+            return self.data.set_index('frame')
         else:
             assert key in self.data.columns, f'The key {key} does not exist in the data.'
-            return self.data[key]
+            return self.data.set_index('frame')[key]
 
 
     def get_data_aligned(self, key = None):
@@ -495,6 +495,7 @@ class Experiment(PickleDumpLoadMixin):
         tmp = []
         for worm in self.samples:
             tmp.append(worm.get_data(key))
+        # set index to frame
         tmp = pd.concat(tmp, axis = 1, ignore_index = ignore_index)
         if filterfunction is not None:
             filtercondition = tmp.apply(filterfunction)
