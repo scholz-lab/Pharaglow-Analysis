@@ -257,7 +257,7 @@ class Worm(PickleDumpLoadMixin):
         if key == None:
             return self.aligned_data
         else:
-            assert key in self.get_data_aligned[0].columns, f'The key {key} does not exist in the data.'
+            assert key in self.aligned_data[0].columns, f'The key {key} does not exist in the data.'
             return pd.concat([data.loc[:,key] for data in self.aligned_data], axis = 1)
 
 
