@@ -338,6 +338,7 @@ class Worm(PickleDumpLoadMixin):
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
         tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
+        tmp['time_align'] = tmp.index.values/self.fps
         return tmp
     
 
@@ -584,9 +585,8 @@ class Experiment(PickleDumpLoadMixin):
         if aligned:
             # time is not menaingful, choose a different key
             if key_x == 'time':
-                x = pd.DataFrame(self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis).index.values)
-            else:
-                x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
+                key_x = 'time_align'
+            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
             y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
                 
             if metric_error is not None:
