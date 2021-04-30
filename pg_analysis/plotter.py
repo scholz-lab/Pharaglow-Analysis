@@ -216,7 +216,7 @@ class Worm(PickleDumpLoadMixin):
         filterfunction: a callable that returns a boolean for each entry in the series aligned_data[key] 
         """
         assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
-        assert key in self.aligned_data.columns, f'The key {key} does not exist in the data.'
+        assert key in self.aligned_data[0].columns, f'The key {key} does not exist in the data.'
         tmp = self.get_data_aligned(key)
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
