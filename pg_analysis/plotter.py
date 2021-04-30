@@ -233,15 +233,22 @@ class Worm(PickleDumpLoadMixin):
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
 
 
-    def get_data(self, key = None, aligned = False):
-        """return a column of data with name 'key' or the whole pandas dataframe."""
+    def get_data(self, key = None, aligned = False, index_column = 'frame'):
+        """return a column of data with name 'key' or the whole pandas dataframe.
+        key: a column of self.data
+        aligned: Toggle using aligned or full data
+        index_column: The returned dataframe or series will have that column as index. Important for concatenation.
+        """
         if aligned:
             self.get_data_aligned(key)
         if key == None:
-            return self.data.set_index('frame')
+            return self.data.set_index(index_column)
+        elif key == 'frame':
+            warnings.warn(f'You requested {key}. The index of this series will be meaningless.')
+            return self.data['frame']
         else:
             assert key in self.data.columns, f'The key {key} does not exist in the data.'
-            return self.data.set_index('frame')[key]
+            return self.data.set_index(index_column)[key]
 
 
     def get_data_aligned(self, key = None):
@@ -264,7 +271,8 @@ class Worm(PickleDumpLoadMixin):
         h = np.linspace(self.data['pump_clean'].median(), self.data['pump_clean'].max(), 50)
         heights = kwargs.pop('heights', h)
         peaks, _,_  = tools.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
-        
+        # remove all illegal intervals
+        peaks[np]
         if len(peaks)>0:
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
