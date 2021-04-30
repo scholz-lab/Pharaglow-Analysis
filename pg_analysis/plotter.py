@@ -582,8 +582,11 @@ class Experiment(PickleDumpLoadMixin):
         xerr = None
         yerr = None
         if aligned:
-            
-            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
+            # time is not menaingful, choose a different key
+            if key_x == 'time':
+                x = pd.DataFrame(self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis).index.values)
+            else:
+                x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
             y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
                 
             if metric_error is not None:
