@@ -194,19 +194,19 @@ class Worm(PickleDumpLoadMixin):
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
             tmp = tmp.loc[filtercondition]
+
+        if metric == "sum":
+            return tmp.sum()
         if metric == "mean":
             return tmp.mean()
-        
         if metric == "std":
             return tmp.std()
-        
         if metric == "N":
             return tmp.count()
-        
         if metric == "sem":
            return tmp.std()/np.sqrt(tmp.count())
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' , 'sum' or 'N'")
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -221,6 +221,8 @@ class Worm(PickleDumpLoadMixin):
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
             tmp = tmp.loc[filtercondition]
+        if metric == "sum":
+            return tmp.sum(axis = 1)
         if metric == "mean":
             return tmp.mean(axis = 1)
         if metric == "std":
@@ -230,7 +232,7 @@ class Worm(PickleDumpLoadMixin):
         if metric == "sem":
            return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum,' or 'N'")
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -358,6 +360,7 @@ class Worm(PickleDumpLoadMixin):
         for timepoint in self.timepoints:
             tmp = self.align(timepoint,  tau_before, tau_after, key, column_align)
             self.aligned_data.append(tmp)
+
 
     def calculate_count_rate(self, window, **kwargs):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
@@ -510,6 +513,8 @@ class Experiment(PickleDumpLoadMixin):
             tmp = tmp.loc[:,filtercondition]
         if metric ==None:
             return tmp
+        if metric == "sum":
+            return tmp.sum(axis = axis)
         if metric == "mean":
             return tmp.mean(axis = axis)
         if metric == "std":
@@ -541,10 +546,12 @@ class Experiment(PickleDumpLoadMixin):
         tmp = pd.concat(tmp, axis = 1)
 
         if filterfunction is not None:
-            filtercondition = tmp.apply(filterfunction)
+            filtercondition = tmp.apply(filterfunction, axis=axis)
             tmp = tmp.loc[:,filtercondition]
         if metric_sample ==None:
             return tmp
+        if metric_sample == "sum":
+            return tmp.sum(axis = axis)
         if metric_sample == "mean":
             return tmp.mean(axis = axis)
         if metric_sample == "std":
@@ -556,7 +563,7 @@ class Experiment(PickleDumpLoadMixin):
         if metric_sample == "collapse":
             return pd.DataFrame(tmp.values.ravel())
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
     ######################################
     #
     #   Plotting functions
