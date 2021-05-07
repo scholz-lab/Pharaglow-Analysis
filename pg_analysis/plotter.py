@@ -264,6 +264,43 @@ class Worm(PickleDumpLoadMixin):
             return pd.concat([data.loc[:,key] for data in self.aligned_data], axis = 1)
 
 
+    def get_events(self, events = 'pump_events', unit = 'index', aligned = False):
+        """return peak locations for this worm i.e., where a binary column is 1 or True.
+        unit: column of data at which to evaluate e.g. 'time'
+        """
+        if aligned:
+            assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
+            for subset in self.aligned_data:
+                tmp = []
+                if unit =='index' or unit == None:
+                    tmp.append(subset.index[subset[events]==True].values)
+                else:
+                    tmp.append(subset[unit][subset[events]==True].values)
+            return tmp
+        else:
+            if unit =='index' or unit == None:
+                return self.data.index[self.data[events]==True].values
+            else:
+                return self.data[unit][self.data[events]==True].values
+
+
+    def calculate_smoothed(self, key, window, aligned = False, **kwargs):
+        """use rolling apply to smooth a series with the given parameters which is added as a column to the existing data.
+        window: size of the rolling window.
+        key: a column of self.data or self.aligned_data
+        kwargs: passed onto pd.rolling
+        """
+        kwargs['win_type'] = kwargs.pop('win_type', 'boxcar')
+        kwargs['center'] =  kwargs.pop('center', True)
+        kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
+        if aligned:
+            assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
+            for dset in self.aligned_data:
+                self.dset[f'{key}_smooth'] = self.dset[key].rolling(window, **kwargs).mean()
+        else:
+            self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
+
+
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
@@ -328,26 +365,6 @@ class Worm(PickleDumpLoadMixin):
         self.data['reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
     
-
-    def get_events(self, events = 'pump_events', unit = 'index', aligned = False):
-        """return peak locations for this worm i.e., where a binary column is 1 or True.
-        unit: column of data at which to evaluate e.g. 'time'
-        """
-        if aligned:
-            assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
-            for subset in self.aligned_data:
-                tmp = []
-                if unit =='index' or unit == None:
-                    tmp.append(subset.index[subset['pump_events']==True].values)
-                else:
-                    tmp.append(subset[unit][subset['pump_events']==True].values)
-            return tmp
-        else:
-            if unit =='index' or unit == None:
-                return self.data.index[self.data['pump_events']==True].values
-            else:
-                return self.data[unit][self.data['pump_events']==True].values
-
 
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
         """align to a timepoint.
@@ -496,6 +513,15 @@ class Experiment(PickleDumpLoadMixin):
         self.metadata['count_rate_window'] = window
         for worm in self.samples:
             worm.calculate_count_rate(window,**kwargs)
+    
+    def calculate_smoothed(self, key, window, aligned = False, **kwargs):
+        """calculate smoothing for each worm."""
+
+        self.metadata['smoothing_window'] = window
+        for key in kwargs:
+            self.metadata[f'smoothing_{key}'] = kwargs[key]
+        for worm in self.samples:
+            worm.calculate_smoothed(key, window, aligned, **kwargs)
     ######################################
     #
     #   get/set attributes
