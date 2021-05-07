@@ -296,7 +296,7 @@ class Worm(PickleDumpLoadMixin):
         if aligned:
             assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
             for dset in self.aligned_data:
-                self.dset[f'{key}_smooth'] = self.dset[key].rolling(window, **kwargs).mean()
+                dset[f'{key}_smooth'] = dset[key].rolling(window, **kwargs).mean()
         else:
             self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
 
@@ -486,10 +486,10 @@ class Experiment(PickleDumpLoadMixin):
         self.stimulus = np.loadtxt(filename)
     
 
-    def align_data(self, timepoints, tau_before, tau_after, key = None):
+    def align_data(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
         """calculate aligned data for all worms"""
         for worm in self.samples:
-            worm.multi_align(timepoints, tau_before, tau_after, key = key)
+            worm.multi_align(timepoints, tau_before, tau_after, key = key, column_align = column_align)
 
 
     def calculate_reversals(self, animal_size, angle_treshold):
