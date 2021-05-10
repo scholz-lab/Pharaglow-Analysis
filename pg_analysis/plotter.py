@@ -44,7 +44,7 @@ def _hist(y, ax, **kwargs):
                 # the histogram of the data
             num_bins = kwargs.pop('nbins', int(yi.count()**0.5))
             density = kwargs.pop('density', True)
-            n, bins, patches = ax[(wi)%len(ax)].hist(yi, num_bins, density=density)
+            n, bins, patches = ax[(wi)%len(ax)].hist(yi, num_bins, density=density, **kwargs)
             #plot.append(ax[(wi+1)%len(ax)].plot(bins, yi, **kwargs))
     else:
         if len(y.columns)>1:
@@ -54,12 +54,12 @@ def _hist(y, ax, **kwargs):
                 # the histogram of the data
                 num_bins = kwargs.pop('nbins', int(yi.count()**0.5))
                 density = kwargs.pop('density', True)
-                n, bins, patches = ax.hist(yi, num_bins, density=density)
+                n, bins, patches = ax.hist(yi, num_bins, density=density, **kwargs)
         else:
             # the histogram of the data
             num_bins = kwargs.pop('nbins', int(y.count()**0.5))
             density = kwargs.pop('density', True)
-            plot = ax.hist(y, num_bins, density=density)
+            plot = ax.hist(y, num_bins, density=density, **kwargs)
             #plot = ax.plot(bins, y, **kwargs)
     return plot
 
