@@ -514,12 +514,13 @@ class Experiment(PickleDumpLoadMixin):
         for worm in self.samples:
             worm.calculate_count_rate(window,**kwargs)
     
+
     def calculate_smoothed(self, key, window, aligned = False, **kwargs):
         """calculate smoothing for each worm."""
 
         self.metadata['smoothing_window'] = window
-        for key in kwargs:
-            self.metadata[f'smoothing_{key}'] = kwargs[key]
+        for keyword in kwargs:
+            self.metadata[f'smoothing_{keyword}'] = kwargs[keyword]
         for worm in self.samples:
             worm.calculate_smoothed(key, window, aligned, **kwargs)
     ######################################
