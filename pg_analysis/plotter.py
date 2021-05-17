@@ -615,7 +615,7 @@ class Experiment(PickleDumpLoadMixin):
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
     
 
-    def get_events(self, events = 'pump_events' ,unit = None):
+    def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
         """ get peak locations for all samples.
             events: column with binary entries. 
             unit: column of data at which to evaluate e.g. 'time'
@@ -623,7 +623,7 @@ class Experiment(PickleDumpLoadMixin):
         """
         tmp = []
         for worm in self.samples:
-            tmp.append(worm.get_events(events, unit))
+            tmp.append(worm.get_events(events, unit, aligned))
         return tmp
     ######################################
     #
