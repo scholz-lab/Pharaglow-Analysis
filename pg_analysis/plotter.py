@@ -507,12 +507,12 @@ class Experiment(PickleDumpLoadMixin):
             worm.calculate_reversals(animal_size, angle_treshold)
     
 
-    def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95):
+    def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95, **kwargs):
         """calculate the pumps for each worm"""
         for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
             self.metadata[key] = value
         for worm in self.samples:
-            worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity)
+            worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity, **kwargs)
     
 
     def calculate_count_rate(self, window,**kwargs):
