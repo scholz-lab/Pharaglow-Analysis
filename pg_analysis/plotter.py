@@ -129,7 +129,7 @@ def _heatmap(x, y, ax, **kwargs):
 
 class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
-    def __init__(self, filename, columns,fps, scale, **kwargs):
+    def __init__(self, filename, columns,fps, scale, particle_index = None, **kwargs):
         """initialize object and load a pharaglow results file."""
         self.fps = fps
         self.scale = scale
@@ -137,7 +137,10 @@ class Worm(PickleDumpLoadMixin):
         print('Reading', filename)
         # keep some metadata
         self.experiment = os.path.basename(filename)
-        self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
+        if particle_index is not None:
+            self.particle_index = particle_index 
+        else:
+            self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
         self._load(filename, columns, fps, scale, **kwargs)
 
@@ -461,7 +464,7 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, **kwargs):
+    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, filterword = None, **kwargs):
         """load all results files from a folder. 
             Inputs:
                 path: location of pharaglow results files
@@ -479,7 +482,7 @@ class Experiment(PickleDumpLoadMixin):
             file = os.path.join(path,fn)
             if j >= nmax:
                 break
-            if os.path.isfile(file) and 'results_' in fn and fn.endswith('.json'):
+            if os.path.isfile(file) and filterword in fn and fn.endswith('.json'):
                 self.samples.append(Worm(file, columns, self.fps, self.scale, **kwargs))
                 j += 1
                 
