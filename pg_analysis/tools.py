@@ -66,11 +66,12 @@ def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivi
     # check where this is still positive and where the valid intervals are 1 or some large value
     valid = np.where((metric_random>0)*(tmp[:,1]>=sensitivity))[0]
     if len(valid)>0:
-        peaks = all_peaks[valid[np.argmax(tmp[:,0][valid])]]
+        #peaks = all_peaks[valid[np.argmax(tmp[:,0][valid])]]
+        h = heights[valid[np.argmax(tmp[:,0][valid])]]
+        peaks = find_peaks(p, height = h,threshold = 0.0, distance = min_distance)[0]
     else:
         return [], tmp, null
     return peaks, tmp, null
-
 
 class PickleDumpLoadMixin:
     """ Provides methods to save an object to file and to load it from file
