@@ -153,11 +153,14 @@ class Worm(PickleDumpLoadMixin):
         #
         # velocity and real time
         traj['time'] = traj['frame']/fps
-        #print(traj.info())
-        traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
+            #print(traj.info())
+        try:
+            traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
+        except KeyError:
+            print('Velocity calculation failed. Continuing.')
         self.data = traj
         try:
-	    # pumping related data
+        # pumping related data
             if "w_bg" not in kwargs.keys():
                 kwargs["w_bg"] = 10
                 print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
@@ -290,6 +293,21 @@ class Worm(PickleDumpLoadMixin):
             else:
                 return self.data[unit][self.data[events]==True].values
 
+    def add_column(self, key, values, overwrite = True):
+        """add a data column to the underlying datset. Will overwrite existing column names if overwrite.
+            key: name of new (or existing) column
+            values: list with the same length or series with matching index, or dict with ma
+            kwargs: passed onto pd.rolling
+        """
+
+        if key in self.data.columns and not overwrite:
+            warnings.warn(f'Column {key} exists. If you want to overwrite the existing data, use overwrite = True.')
+        else:
+            if len(values) == len(self.data.index):
+                self.data[key] = values
+            else:
+                warnings.warn(f'Length of values {len(values)} does not match size of the data {len(self.data.index)}. Column was not updated.')
+        
 
     def calculate_smoothed(self, key, window, aligned = False, **kwargs):
         """use rolling apply to smooth a series with the given parameters which is added as a column to the existing data.
@@ -308,10 +326,10 @@ class Worm(PickleDumpLoadMixin):
             self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
 
 
-    def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
+    def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, key = 'pumps', **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
-        self.data['pump_clean'] = tools.hampel(self.data['pumps'], w_bg*30)
+        self.data['pump_clean'] = tools.hampel(self.data[key], w_bg*30)
         self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
         # deal with heights for the expected peaks
         ### here we make the heights sensible: threshold between median and maximum of trace
