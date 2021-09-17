@@ -134,7 +134,7 @@ class Worm(PickleDumpLoadMixin):
         self.fps = fps
         self.scale = scale
         self.flag = False
-        print('Reading', filename)
+        
         # keep some metadata
         self.experiment = os.path.basename(filename)
         if particle_index is not None:
@@ -142,6 +142,7 @@ class Worm(PickleDumpLoadMixin):
         else:
             self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
+        print('Reading', filename)
         self._load(filename, columns, fps, scale, **kwargs)
 
 
@@ -150,10 +151,15 @@ class Worm(PickleDumpLoadMixin):
         traj = pd.read_json(filename, orient='split')
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
-        #
+        # extract the centerlines and other non-scalar values into an array instead
+        if 'Centerline' in columns:
+            self.centerline = np.array(traj['Centerline'])
+        if 'Straightened' in columns:
+            self.images = np.array([np.array(im) for im in traj['Straightened']])
+        traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
         # velocity and real time
         traj['time'] = traj['frame']/fps
-            #print(traj.info())
+           
         try:
             traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         except KeyError:
@@ -297,7 +303,7 @@ class Worm(PickleDumpLoadMixin):
         """add a data column to the underlying datset. Will overwrite existing column names if overwrite.
             key: name of new (or existing) column
             values: list with the same length or series with matching index, or dict with ma
-            kwargs: passed onto pd.rolling
+            overwrite: replaces column if it exists.
         """
 
         if key in self.data.columns and not overwrite:
@@ -467,14 +473,14 @@ class Experiment(PickleDumpLoadMixin):
         if isinstance(key, slice):
             # do your handling for a slice object:
             samples = self.samples[key.start:key.stop:key.step]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = samples)
+            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = samples.copy())
         elif isinstance( key, int ):
             if key < 0 : #Handle negative indices
                 key += len( self )
             if key < 0 or key >= len(self) :
                 raise IndexError(f"The index ({key}) is out of range.")
             sample = self.samples[key]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample])
+            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample.copy()])
         else:
             raise TypeError("Invalid argument type.")
     ######################################
@@ -510,6 +516,15 @@ class Experiment(PickleDumpLoadMixin):
         #TODO test and adapt
         self.stimulus = np.loadtxt(filename)
     
+    def add_column(self, key, values, overwrite = True):
+        """add a column of data to each worm. 
+            key: name of new (or existing) column
+            values: Array or List containing the values added to each sample in the experiment.
+            overwrite: overwrite column if it exists.
+        """
+        assert len(values) == len(self.samples), f'Number of values provided {len(values)} does not match the number of samples in the experiment {len(self.samples)}.'
+        for n, worm in enumerate(self.samples):
+            worm.add_column(key, values[n], overwrite)
 
     def align_data(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
         """calculate aligned data for all worms"""
