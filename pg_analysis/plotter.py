@@ -455,7 +455,7 @@ class Worm(PickleDumpLoadMixin):
         angle[np.isnan(angle)] = 0
         # determine when angle is over threshold
         rev = angle > angle_threshold
-        self.add_column(self, 'reversals', rev, overwrite = True)
+        self.add_column('reversals', rev, overwrite = True)
     
 
     def calculate_nose_speed(self, dt = 1):
@@ -478,8 +478,8 @@ class Worm(PickleDumpLoadMixin):
         v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/dt*self.scale*self.fps
         v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/dt*self.scale*self.fps
         # add to data
-        self.add_column(self, 'nose_speed', v_nose_abs, overwrite = True)
-        self.add_column(self, 'cms_speed', v_cms_abs, overwrite = True)
+        self.add_column('nose_speed', v_nose_abs, overwrite = True)
+        self.add_column('cms_speed', v_cms_abs, overwrite = True)
  
 
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
