@@ -153,7 +153,7 @@ class Worm(PickleDumpLoadMixin):
         traj = traj.filter(columns)
         # extract the centerlines and other non-scalar values into an array instead
         if 'Centerline' in columns:
-            self.centerline = np.array(traj['Centerline'])
+            self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
         if 'Straightened' in columns:
             self.images = np.array([np.array(im) for im in traj['Straightened']])
         traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
@@ -220,8 +220,12 @@ class Worm(PickleDumpLoadMixin):
             return tmp.count()
         if metric == "sem":
            return tmp.std()/np.sqrt(tmp.count())
+        if metric == "median":
+            return tmp.median()
+        if metric == "rate":
+            return tmp.sum()/tmp.count()*self.fps
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' , 'sum' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate', or 'N'")
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -246,8 +250,11 @@ class Worm(PickleDumpLoadMixin):
             return tmp.count(axis =1)
         if metric == "sem":
            return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
+        if metric == 'median':
+            return tmp.median(axis = 1)
+
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum,' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,' or 'N'")
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -322,6 +329,7 @@ class Worm(PickleDumpLoadMixin):
     #######################################
     def calculate_property(self, name, **kwargs):
         """calculate additional properties on the whole dataset, calling functions for each worm."""
+
         funcs = {"reversals": self.calculate_reversals,
                 "count_rate": self.calculate_count_rate,
                 "smoothed": self.calculate_smoothed,
@@ -329,7 +337,9 @@ class Worm(PickleDumpLoadMixin):
                 "nose_speed": self.calculate_nose_speed,
                 "reversals_nose": self.calculate_reversals_nose
         }
-       
+        if name == 'help':
+            print(funcs)
+            return
         # run function
         funcs[name](**kwargs)
 
@@ -380,7 +390,7 @@ class Worm(PickleDumpLoadMixin):
         self.data['count_rate'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
 
 
-    def calculate_reversals(self, animal_size, angle_treshold):
+    def calculate_reversals(self, animal_size, angle_threshold):
         """Adaptation of the Hardaker's method to detect reversal event. 
         A single worm's centroid trajectory is re-sampled with a distance interval equivalent to 1/10 
         of the worm's length (100um) and then reversals are calculated from turning angles.
@@ -411,23 +421,20 @@ class Worm(PickleDumpLoadMixin):
             v2 = [row.x1, row.y1]
             return np.degrees(np.arccos(np.dot(v1, v2)/np.linalg.norm(v1)/np.linalg.norm(v2)))
         traj_Resampled['angle'] = traj_Resampled.apply(lambda row: angle(row), axis =1)
-        rev = traj_Resampled.index[traj_Resampled.angle>=angle_treshold]
+        rev = traj_Resampled.index[traj_Resampled.angle>=angle_threshold]
         self.data['reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
-    
-    def calculate_reversals_nose(self, angle_treshold):
-        "using the motion of the nosetip relative to the center of mass motion to determine reversals."
-        """calculate the deviation of the head motion from the mean trajectory.
-        cl: array (T, L, 2) centerlines as a function of Time, Length, and (X,Y)
-        cms: X,Y coordinates of center of mass motion of the worm not present in CL
-        window: window for subsampling the measured trajectories.
-        """
+     
+
+    def calculate_reversals_nose(self, dt =1, angle_threshold = 150):
+        """using the motion of the nosetip relative to the center of mass motion to determine reversals."""
+        
         try:
             cl = self.centerline
         except AttributeError:
             warnings.warn('data does not contain centerlines.')
             return 
-        cms = np.stack([self.data.x, self.data.y])[:,:,0].T
+        cms = np.stack([self.data.x, self.data.y]).T
         # trajectories - CMS - coarse-grain
         # check the number of points of each centerline
         nPts = len(cl[0])
@@ -451,7 +458,7 @@ class Worm(PickleDumpLoadMixin):
         self.add_column(self, 'reversals', rev, overwrite = True)
     
 
-    def calculate_nose_speed(cl, cms, dt,  fps = 30, umpx = 2.34):
+    def calculate_nose_speed(self, dt = 1):
         """Calculate the cms and nose velocities. """
         try:
             cl = self.centerline
@@ -459,7 +466,7 @@ class Worm(PickleDumpLoadMixin):
             warnings.warn('data does not contain centerlines.')
             return 
         # trajectories - CMS - coarse-grain
-        cms = np.stack([self.data.x, self.data.y])[:,:,0].T
+        cms = np.stack([self.data.x, self.data.y]).T
         # note, the centerline is ordered y,x
         # subtract the mean since the cl is at (50,50)
         yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
@@ -614,7 +621,7 @@ class Experiment(PickleDumpLoadMixin):
 
     def calculate_property(self, name, **kwargs):
         """calculate additional properties on the whole dataset, calling functions for each worm."""
-        
+
         # save metadata
         self.metadata[name] = {}
         for keyword in kwargs:
@@ -623,37 +630,7 @@ class Experiment(PickleDumpLoadMixin):
         for worm in self.samples:
              worm.calculate_property(name, **kwargs)
 
-    # def calculate_reversals(self, animal_size, angle_treshold):
-    #     """calculate the reversals for each worm"""
-    #     self.metadata['animal_size'] = animal_size
-    #     self.metadata['angle_threshold'] = angle_treshold
-    #     for worm in self.samples:
-    #         worm.calculate_reversals(animal_size, angle_treshold)
-    
-
-    # def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95, **kwargs):
-    #     """calculate the pumps for each worm"""
-    #     for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
-    #         self.metadata[key] = value
-    #     for worm in self.samples:
-    #         worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity, **kwargs)
-    
-
-    # def calculate_count_rate(self, window,**kwargs):
-    #     """calculate the reversals for each worm"""
-    #     self.metadata['count_rate_window'] = window
-    #     for worm in self.samples:
-    #         worm.calculate_count_rate(window,**kwargs)
-    
-
-    # def calculate_smoothed(self, key, window, aligned = False, **kwargs):
-    #     """calculate smoothing for each worm."""
-
-    #     self.metadata['smoothing_window'] = window
-    #     for keyword in kwargs:
-    #         self.metadata[f'smoothing_{keyword}'] = kwargs[keyword]
-    #     for worm in self.samples:
-    #         worm.calculate_smoothed(key, window, aligned, **kwargs)
+   
     ######################################
     #
     #   get/set attributes
