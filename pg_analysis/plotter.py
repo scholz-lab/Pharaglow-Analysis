@@ -299,6 +299,7 @@ class Worm(PickleDumpLoadMixin):
             else:
                 return self.data[unit][self.data[events]==True].values
 
+
     def add_column(self, key, values, overwrite = True):
         """add a data column to the underlying datset. Will overwrite existing column names if overwrite.
             key: name of new (or existing) column
@@ -313,7 +314,25 @@ class Worm(PickleDumpLoadMixin):
                 self.data[key] = values
             else:
                 warnings.warn(f'Length of values {len(values)} does not match size of the data {len(self.data.index)}. Column was not updated.')
-        
+    
+    ######################################
+    #
+    #   calculate additional metrics
+    #
+    #######################################
+    def calculate_property(self, name, **kwargs):
+        """calculate additional properties on the whole dataset, calling functions for each worm."""
+        funcs = {"reversals": self.calculate_reversals,
+                "count_rate": self.calculate_count_rate,
+                "smoothed": self.calculate_smoothed,
+                "pumps": self.calculate_pumps,
+                "nose_speed": self.calculate_nose_speed,
+                "reversals_nose": self.calculate_reversals_nose
+        }
+       
+        # run function
+        funcs[name](**kwargs)
+
 
     def calculate_smoothed(self, key, window, aligned = False, **kwargs):
         """use rolling apply to smooth a series with the given parameters which is added as a column to the existing data.
@@ -396,6 +415,65 @@ class Worm(PickleDumpLoadMixin):
         self.data['reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
     
+    def calculate_reversals_nose(self, angle_treshold):
+        "using the motion of the nosetip relative to the center of mass motion to determine reversals."
+        """calculate the deviation of the head motion from the mean trajectory.
+        cl: array (T, L, 2) centerlines as a function of Time, Length, and (X,Y)
+        cms: X,Y coordinates of center of mass motion of the worm not present in CL
+        window: window for subsampling the measured trajectories.
+        """
+        try:
+            cl = self.centerline
+        except AttributeError:
+            warnings.warn('data does not contain centerlines.')
+            return 
+        cms = np.stack([self.data.x, self.data.y])[:,:,0].T
+        # trajectories - CMS - coarse-grain
+        # check the number of points of each centerline
+        nPts = len(cl[0])
+        # note, the centerline is ordered y,x
+        # subtract the mean since the cl is at (50,50) or similar
+        yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
+        cl_new = np.stack([xc, yc]).T + np.repeat(cms[:,np.newaxis,:], nPts, axis = 1)
+        nose = cl_new[:,0,:]
+        #calculate directions - in the lab frame! and with dt
+        v_nose = nose[dt:]-nose[:-dt]
+        #v_cms = cms[dt:]-cms[:-dt]
+        # tangent of the worm = 'heading'
+        heading = cl_new[:,0,]-cl_new[:,nPts//2,]
+        
+        # angle relative to cms motion
+        angle = np.array([np.arccos(np.dot(v1, v2)/(np.linalg.norm(v2)*np.linalg.norm(v1)))*180/np.pi for \
+                          (v1, v2) in zip(v_nose, heading)])
+        angle[np.isnan(angle)] = 0
+        # determine when angle is over threshold
+        rev = angle > angle_threshold
+        self.add_column(self, 'reversals', rev, overwrite = True)
+    
+
+    def calculate_nose_speed(cl, cms, dt,  fps = 30, umpx = 2.34):
+        """Calculate the cms and nose velocities. """
+        try:
+            cl = self.centerline
+        except AttributeError:
+            warnings.warn('data does not contain centerlines.')
+            return 
+        # trajectories - CMS - coarse-grain
+        cms = np.stack([self.data.x, self.data.y])[:,:,0].T
+        # note, the centerline is ordered y,x
+        # subtract the mean since the cl is at (50,50)
+        yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
+        cl_new = np.stack([xc, yc]).T + np.repeat(cms[:,np.newaxis,:], 100, axis = 1)
+        nose = cl_new[:,0,:]
+        #calculate directions - in the lab frame! and with dt
+        v_nose = nose[dt:]-nose[:-dt]
+        v_cms = cms[dt:]-cms[:-dt]
+        v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/dt*self.scale*self.fps
+        v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/dt*self.scale*self.fps
+        # add to data
+        self.add_column(self, 'nose_speed', v_nose_abs, overwrite = True)
+        self.add_column(self, 'cms_speed', v_cms_abs, overwrite = True)
+ 
 
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
         """align to a timepoint.
@@ -516,6 +594,7 @@ class Experiment(PickleDumpLoadMixin):
         #TODO test and adapt
         self.stimulus = np.loadtxt(filename)
     
+
     def add_column(self, key, values, overwrite = True):
         """add a column of data to each worm. 
             key: name of new (or existing) column
@@ -526,43 +605,55 @@ class Experiment(PickleDumpLoadMixin):
         for n, worm in enumerate(self.samples):
             worm.add_column(key, values[n], overwrite)
 
+
     def align_data(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
         """calculate aligned data for all worms"""
         for worm in self.samples:
             worm.multi_align(timepoints, tau_before, tau_after, key = key, column_align = column_align)
 
 
-    def calculate_reversals(self, animal_size, angle_treshold):
-        """calculate the reversals for each worm"""
-        self.metadata['animal_size'] = animal_size
-        self.metadata['angle_threshold'] = angle_treshold
-        for worm in self.samples:
-            worm.calculate_reversals(animal_size, angle_treshold)
-    
-
-    def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95, **kwargs):
-        """calculate the pumps for each worm"""
-        for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
-            self.metadata[key] = value
-        for worm in self.samples:
-            worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity, **kwargs)
-    
-
-    def calculate_count_rate(self, window,**kwargs):
-        """calculate the reversals for each worm"""
-        self.metadata['count_rate_window'] = window
-        for worm in self.samples:
-            worm.calculate_count_rate(window,**kwargs)
-    
-
-    def calculate_smoothed(self, key, window, aligned = False, **kwargs):
-        """calculate smoothing for each worm."""
-
-        self.metadata['smoothing_window'] = window
+    def calculate_property(self, name, **kwargs):
+        """calculate additional properties on the whole dataset, calling functions for each worm."""
+        
+        # save metadata
+        self.metadata[name] = {}
         for keyword in kwargs:
-            self.metadata[f'smoothing_{keyword}'] = kwargs[keyword]
+             self.metadata[name][keyword] = kwargs[keyword]
+        # run function
         for worm in self.samples:
-            worm.calculate_smoothed(key, window, aligned, **kwargs)
+             worm.calculate_property(name, **kwargs)
+
+    # def calculate_reversals(self, animal_size, angle_treshold):
+    #     """calculate the reversals for each worm"""
+    #     self.metadata['animal_size'] = animal_size
+    #     self.metadata['angle_threshold'] = angle_treshold
+    #     for worm in self.samples:
+    #         worm.calculate_reversals(animal_size, angle_treshold)
+    
+
+    # def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95, **kwargs):
+    #     """calculate the pumps for each worm"""
+    #     for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
+    #         self.metadata[key] = value
+    #     for worm in self.samples:
+    #         worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity, **kwargs)
+    
+
+    # def calculate_count_rate(self, window,**kwargs):
+    #     """calculate the reversals for each worm"""
+    #     self.metadata['count_rate_window'] = window
+    #     for worm in self.samples:
+    #         worm.calculate_count_rate(window,**kwargs)
+    
+
+    # def calculate_smoothed(self, key, window, aligned = False, **kwargs):
+    #     """calculate smoothing for each worm."""
+
+    #     self.metadata['smoothing_window'] = window
+    #     for keyword in kwargs:
+    #         self.metadata[f'smoothing_{keyword}'] = kwargs[keyword]
+    #     for worm in self.samples:
+    #         worm.calculate_smoothed(key, window, aligned, **kwargs)
     ######################################
     #
     #   get/set attributes
