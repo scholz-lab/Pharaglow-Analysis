@@ -455,6 +455,7 @@ class Worm(PickleDumpLoadMixin):
         angle[np.isnan(angle)] = 0
         # determine when angle is over threshold
         rev = angle > angle_threshold
+        rev = np.append(rev, np.nan)
         self.add_column('reversals', rev, overwrite = True)
     
 
@@ -477,6 +478,9 @@ class Worm(PickleDumpLoadMixin):
         v_cms = cms[dt:]-cms[:-dt]
         v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/dt*self.scale*self.fps
         v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/dt*self.scale*self.fps
+        # add back the missing item from difference
+        v_nose_abs = np.append(v_nose_abs, np.nan)
+        v_cms_abs = np.append(v_cms_abs, np.nan)
         # add to data
         self.add_column('nose_speed', v_nose_abs, overwrite = True)
         self.add_column('cms_speed', v_cms_abs, overwrite = True)
