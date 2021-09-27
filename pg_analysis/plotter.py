@@ -682,6 +682,8 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.count(axis = axis)
         if metric == "sem":
            return tmp.std(axis = axis)/self.get_sample_metric(key, 'N', axis=axis)**0.5
+        if metric == "rate":
+            return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
         if metric == "collapse":
             return pd.DataFrame(tmp.values.ravel())
         else:
