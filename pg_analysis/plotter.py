@@ -476,8 +476,9 @@ class Worm(PickleDumpLoadMixin):
         #calculate directions - in the lab frame! and with dt
         v_nose = nose[dt:]-nose[:-dt]
         v_cms = cms[dt:]-cms[:-dt]
-        v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/dt*self.scale*self.fps
-        v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/dt*self.scale*self.fps
+        deltat = self.data.time[dt:]-self.data.time[:-dt]
+        v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/deltat*self.scale#*self.fps
+        v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat*self.scale#*self.fps
         # add back the missing item from difference
         v_nose_abs = np.append(v_nose_abs, np.nan)
         v_cms_abs = np.append(v_cms_abs, np.nan)
