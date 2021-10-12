@@ -46,7 +46,7 @@ def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivi
     all_peaks = []
     # find peaks at different heights
     for h in heights:
-        peaks = find_peaks(p, height = h,threshold = 0.0)[0]
+        peaks = find_peaks(p, prominence = h, **kwargs)[0]
         tmp.append([len(peaks), np.mean(np.diff(peaks)>=min_distance)])
         all_peaks.append(peaks)
     tmp = np.array(tmp)
@@ -56,9 +56,9 @@ def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivi
     null = []
     l = len(p)
     for npeaks in tmp[:,0]:
-        locs = np.random.randint(0,l,(500, int(npeaks)))
+        locs = np.random.randint(0,l,(100, int(npeaks)))
         # calculate the random error rate - and its stdev
-        null.append([np.mean(np.diff(np.sort(locs), axis =1)>=min_distance), np.std(np.mean(np.diff(np.sort(locs), axis =1)>=5, axis =1))])
+        null.append([np.mean(np.diff(np.sort(locs), axis =1)>=min_distance), np.std(np.mean(np.diff(np.sort(locs), axis =1)>=min_distance, axis =1))])
     null = np.array(null)
     # now find the best peak level - larger than random, with high accuracy
     # subtract random level plus 1 std:
@@ -68,7 +68,7 @@ def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivi
     if len(valid)>0:
         #peaks = all_peaks[valid[np.argmax(tmp[:,0][valid])]]
         h = heights[valid[np.argmax(tmp[:,0][valid])]]
-        peaks = find_peaks(p, height = h,threshold = 0.0, distance = min_distance)[0]
+        peaks = find_peaks(p, prominence = h, distance = min_distance, **kwargs)[0]
     else:
         return [], tmp, null
     return peaks, tmp, null
