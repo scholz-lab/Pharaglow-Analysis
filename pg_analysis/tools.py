@@ -35,7 +35,7 @@ def hampel(vals_orig, k=7, t0=3):
 
 def preprocess(p, w_bg, w_sm, win_type_bg = 'hamming', win_type_sm = 'boxcar', **kwargs):
     """preprocess a trace with rolling window brackground subtraction."""
-    bg = p.rolling(w_bg, min_periods=1, center=True, win_type=win_type_bg).mean()
+    bg = p.rolling(w_bg, min_periods=1, center=True, win_type=win_type_bg).median()
     return (p - bg).rolling(w_sm, min_periods=1, center=True, win_type=win_type_sm).mean(), bg
 
 
