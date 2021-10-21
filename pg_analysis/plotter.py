@@ -364,7 +364,8 @@ class Worm(PickleDumpLoadMixin):
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, key = 'pumps', **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
-        self.data['pump_clean'] = tools.hampel(self.data[key], w_bg*30)
+        sigma = kwargs.pop('sigma', 2)
+        self.data['pump_clean'] = tools.hampel(self.data[key], w_bg*30, sigma)
         self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
         # deal with heights for the expected peaks
         ### here we make the heights sensible: threshold between median and maximum of trace
