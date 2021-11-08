@@ -1,5 +1,6 @@
 import os
 import pickle
+import copy
 import warnings
 
 import numpy as np
@@ -129,7 +130,7 @@ def _heatmap(x, y, ax, **kwargs):
 
 class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
-    def __init__(self, filename, columns,fps, scale, particle_index = None, **kwargs):
+    def __init__(self, filename, columns,fps, scale, particle_index = None, load = True, **kwargs):
         """initialize object and load a pharaglow results file."""
         self.fps = fps
         self.scale = scale
@@ -142,8 +143,9 @@ class Worm(PickleDumpLoadMixin):
         else:
             self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
         # load data
-        print('Reading', filename)
-        self._load(filename, columns, fps, scale, **kwargs)
+        if load:
+            print('Reading', filename)
+            self._load(filename, columns, fps, scale, **kwargs)
 
 
     def _load(self, filename, columns, fps, scale, **kwargs):
@@ -187,6 +189,14 @@ class Worm(PickleDumpLoadMixin):
         finally: 
             # ensure numerical index
             self.data = self.data.reset_index()
+
+    #def __copy__(self):
+    #    return copy.copy(self)
+
+
+    #def __deepcopy__(self, memo):
+    #   return copy.deepcopy(self, memo)
+
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -457,7 +467,7 @@ class Worm(PickleDumpLoadMixin):
         # determine when angle is over threshold
         rev = angle > angle_threshold
         rev = np.append(rev, np.nan)
-        self.add_column('reversals', rev, overwrite = True)
+        self.add_column('reversals_nose', rev, overwrite = True)
     
 
     def calculate_nose_speed(self, dt = 1):
@@ -572,7 +582,7 @@ class Experiment(PickleDumpLoadMixin):
             if key < 0 or key >= len(self) :
                 raise IndexError(f"The index ({key}) is out of range.")
             sample = self.samples[key]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample.copy()])
+            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample].copy())
         else:
             raise TypeError("Invalid argument type.")
     ######################################
