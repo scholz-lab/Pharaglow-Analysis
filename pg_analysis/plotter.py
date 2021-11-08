@@ -698,7 +698,7 @@ class Experiment(PickleDumpLoadMixin):
         if metric == "rate":
             return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
         if metric == "collapse":
-            return pd.DataFrame(tmp.values.ravel())
+            return pd.DataFrame(tmp.values.ravel(), columns = [key])
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
 
@@ -737,7 +737,7 @@ class Experiment(PickleDumpLoadMixin):
         if metric_sample == "sem":
            return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
-            return pd.DataFrame(tmp.values.ravel())
+            return pd.DataFrame(tmp.values.ravel(), columns=[key])
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
     
