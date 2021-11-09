@@ -374,7 +374,7 @@ class Worm(PickleDumpLoadMixin):
     def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, key = 'pumps', **kwargs):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
-        sigma = kwargs.pop('sigma', 2)
+        sigma = kwargs.pop('sigma', 3)
         self.data['pump_clean'] = tools.hampel(self.data[key], w_bg*30, sigma)
         self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
         # deal with heights for the expected peaks
@@ -642,7 +642,10 @@ class Experiment(PickleDumpLoadMixin):
         # save metadata
         self.metadata[name] = {}
         for keyword in kwargs:
-             self.metadata[name][keyword] = kwargs[keyword]
+            if key in kwargs:
+                self.metadata[f"{name}_{kwargs[key]}"][keyword] = kwargs[keyword]
+            else:
+                self.metadata[name][keyword] = kwargs[keyword]
         # run function
         for worm in self.samples:
              worm.calculate_property(name, **kwargs)
