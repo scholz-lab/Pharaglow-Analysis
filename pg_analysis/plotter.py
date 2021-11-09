@@ -643,7 +643,7 @@ class Experiment(PickleDumpLoadMixin):
         # save metadata
         self.metadata[name] = {}
         for keyword in kwargs:
-            if key in kwargs:
+            if "key" in kwargs:
                 self.metadata[f"{name}_{kwargs[key]}"][keyword] = kwargs[keyword]
             else:
                 self.metadata[name][keyword] = kwargs[keyword]
