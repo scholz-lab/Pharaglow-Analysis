@@ -375,7 +375,8 @@ class Worm(PickleDumpLoadMixin):
         """using a pump trace, get additional pumping metrics."""
         # remove outliers
         sigma = kwargs.pop('sigma', 3)
-        self.data['pump_clean'] = tools.hampel(self.data[key], w_bg*30, sigma)
+        w_outlier = kwargs.pop('w_outlier', 300)
+        self.data['pump_clean'] = tools.hampel(self.data[key], w_outlier, sigma)
         self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
         # deal with heights for the expected peaks
         ### here we make the heights sensible: threshold between median and maximum of trace
