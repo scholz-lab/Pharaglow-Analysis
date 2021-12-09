@@ -424,7 +424,7 @@ class Worm(PickleDumpLoadMixin):
             idx = distance.sub(level).abs().idxmin()
             indices.append(idx)
         # create a downsampled trajectory from these indices
-        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()
+        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()*self.scale
         # we ignore the index here for the shifted data
         traj_Resampled[['x1', 'y1']] = traj_Resampled.shift(1).fillna(0)
         # use the dot product to calculate the andle
@@ -644,7 +644,7 @@ class Experiment(PickleDumpLoadMixin):
         self.metadata[name] = {}
         for keyword in kwargs:
             if "key" in kwargs:
-                self.metadata[f"{name}_{kwargs[key]}"][keyword] = kwargs[keyword]
+                self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
             else:
                 self.metadata[name][keyword] = kwargs[keyword]
         # run function
