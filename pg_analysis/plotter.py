@@ -161,41 +161,12 @@ class Worm(PickleDumpLoadMixin):
         traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
         # velocity and real time
         traj['time'] = traj['frame']/fps
-           
         try:
             traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
         except KeyError:
             print('Velocity calculation failed. Continuing.')
         self.data = traj
-        try:
-        # pumping related data
-            if "w_bg" not in kwargs.keys():
-                kwargs["w_bg"] = 10
-                print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
-            if "w_sm" not in kwargs.keys():
-                kwargs["w_sm"] = 2
-                print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
-            if "sensitivity" not in kwargs.keys():
-                kwargs["sensitivity"] = 0.9
-                print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
-            if "min_distance" not in kwargs.keys():
-                kwargs["min_distance"] = 4
-                print(f'Setting peak distance to {kwargs["min_distance"]} for pump extraction')
-            self.calculate_pumps(kwargs["w_bg"], kwargs["w_sm"], kwargs["min_distance"],  kwargs["sensitivity"])
-        except Exception:
-             print('Pumping extraction failed. Try with different parameters.')
-             self.flag = True
-             self.data = traj
-        finally: 
-            # ensure numerical index
-            self.data = self.data.reset_index()
-
-    #def __copy__(self):
-    #    return copy.copy(self)
-
-
-    #def __deepcopy__(self, memo):
-    #   return copy.deepcopy(self, memo)
+        self.data = self.data.reset_index()
 
 
     def __repr__(self):
@@ -235,7 +206,7 @@ class Worm(PickleDumpLoadMixin):
         if metric == "rate":
             return tmp.sum()/tmp.count()*self.fps
         else:
-            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate', or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', or 'N'")
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -264,7 +235,7 @@ class Worm(PickleDumpLoadMixin):
             return tmp.median(axis = 1)
 
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', or 'N'")
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -337,6 +308,17 @@ class Worm(PickleDumpLoadMixin):
     #   calculate additional metrics
     #
     #######################################
+    def preprocess_signal(self, key, w_outlier, w_bg, w_smooth, **kwargs):
+        "Use outlier removal, background subtraction and filtering to clean a signal."
+        # remove outliers
+        sigma = kwargs.pop('sigma', 3)
+        # make a copy of the signal
+        self.data['{key}_clean'] = self.data[key]
+        if w_outlier is not None:
+            self.data['{key}_clean'] = tools.hampel(self.data[f'{key}_clean'], w_outlier, sigma)
+        self.data['{key}_clean'],_ = tools.preprocess(self.data[f'{key}_clean'], w_bg, w_smooth)
+
+
     def calculate_property(self, name, **kwargs):
         """calculate additional properties on the whole dataset, calling functions for each worm."""
 
@@ -371,18 +353,10 @@ class Worm(PickleDumpLoadMixin):
             self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
 
 
-    def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, key = 'pumps', **kwargs):
+    def calculate_pumps(self, min_distance,  sensitivity, adaptive_window, min_prominence = 0, key = 'pump_clean', use_pyampd = True):
         """using a pump trace, get additional pumping metrics."""
-        # remove outliers
-        sigma = kwargs.pop('sigma', 3)
-        w_outlier = kwargs.pop('w_outlier', 300)
-        self.data['pump_clean'] = tools.hampel(self.data[key], w_outlier, sigma)
-        self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
-        # deal with heights for the expected peaks
-        ### here we make the heights sensible: threshold between median and maximum of trace
-        h = np.linspace(self.data['pump_clean'].median(), self.data['pump_clean'].max(), 50)
-        heights = kwargs.pop('heights', h)
-        peaks, _,_  = tools.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights, **kwargs)
+        signal = self.data[key]
+        peaks = tools.detect_peaks(signal, adaptive_window, min_distance, min_prominence, sensitivity, use_pyampd)
         if len(peaks)>0:
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
@@ -394,12 +368,12 @@ class Worm(PickleDumpLoadMixin):
             self.data['pump_events'] = 0
 
         
-    def calculate_count_rate(self, window, **kwargs):
+    def calculate_count_rate(self, window, key = 'pump_events',  **kwargs):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
         window is in frame. Result will be in Hz."""
         kwargs['center'] =  kwargs.pop('center', True)
         kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
-        self.data['count_rate'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+        self.data[f'count_rate_{key}'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
 
 
     def calculate_reversals(self, animal_size, angle_threshold):
@@ -445,7 +419,7 @@ class Worm(PickleDumpLoadMixin):
             cl = self.centerline
         except AttributeError:
             warnings.warn('data does not contain centerlines.')
-            return 
+            return
         cms = np.stack([self.data.x, self.data.y]).T
         # trajectories - CMS - coarse-grain
         # check the number of points of each centerline
@@ -477,7 +451,7 @@ class Worm(PickleDumpLoadMixin):
             cl = self.centerline
         except AttributeError:
             warnings.warn('data does not contain centerlines.')
-            return 
+            return
         # trajectories - CMS - coarse-grain
         cms = np.stack([self.data.x, self.data.y]).T
         # note, the centerline is ordered y,x
@@ -591,7 +565,7 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, filterword = None, **kwargs):
+    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, filterword = "", **kwargs):
         """load all results files from a folder. 
             Inputs:
                 path: location of pharaglow results files

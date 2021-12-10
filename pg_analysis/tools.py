@@ -5,11 +5,11 @@ import pickle
 
 import numpy as np
 
-
 from collections.abc import Mapping
 from datetime import datetime
 from matplotlib.pylab import style
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, peak_prominences
+from pyampd.ampd import find_peaks_adaptive
 
 
 def hampel(vals_orig, k=7, t0=3):
@@ -39,39 +39,73 @@ def preprocess(p, w_bg, w_sm, win_type_bg = 'hamming', win_type_sm = 'boxcar', *
     return (p - bg).rolling(w_sm, min_periods=1, center=True, win_type=win_type_sm).mean(), bg
 
 
-def find_pumps(p, heights = np.arange(0.01, 5, 0.1), min_distance = 5, sensitivity = 0.99, **kwargs):
-    """peak detection in a background subtracted trace assuming real 
-        peaks have to be at least min_distance samples apart."""
-    tmp = []
-    all_peaks = []
-    # find peaks at different heights
-    for h in heights:
-        peaks = find_peaks(p, prominence = h, **kwargs)[0]
-        tmp.append([len(peaks), np.mean(np.diff(peaks)>=min_distance)])
-        all_peaks.append(peaks)
-    tmp = np.array(tmp)
-    # set the valid peaks score to zero if no peaks are present
-    tmp[:,1][~np.isfinite(tmp[:,1])]= 0
-    # calculate random distribution of peaks in a series of length l (actually we know the intervals will be exponential)
-    null = []
-    l = len(p)
-    for npeaks in tmp[:,0]:
-        locs = np.random.randint(0,l,(100, int(npeaks)))
-        # calculate the random error rate - and its stdev
-        null.append([np.mean(np.diff(np.sort(locs), axis =1)>=min_distance), np.std(np.mean(np.diff(np.sort(locs), axis =1)>=min_distance, axis =1))])
-    null = np.array(null)
-    # now find the best peak level - larger than random, with high accuracy
-    # subtract random level plus 1 std:
-    metric_random = tmp[:,1] - (null[:,0]+null[:,1])
-    # check where this is still positive and where the valid intervals are 1 or some large value
-    valid = np.where((metric_random>0)*(tmp[:,1]>=sensitivity))[0]
-    if len(valid)>0:
-        #peaks = all_peaks[valid[np.argmax(tmp[:,0][valid])]]
-        h = heights[valid[np.argmax(tmp[:,0][valid])]]
-        peaks = find_peaks(p, prominence = h, distance = min_distance, **kwargs)[0]
+def illegal_intervals(signal, peaks, min_dist):
+    """calculate the fraction of illegal intervals given a prominence cutoff."""
+    prom,_,_  = peak_prominences(signal, peaks)
+    frac_ill = np.zeros(len(prom))
+    for i, p in enumerate(np.sort(prom)):
+        tmp_peaks = peaks[prom>p]
+        frac_ill[i] = np.sum(np.diff(tmp_peaks)<min_dist)/len(peaks)
+    return prom, frac_ill
+
+
+def select_valid_peaks(peaks, prom, frac_illegal, sensitivity):
+    idx = np.where(frac_illegal <= 1-sensitivity)[0]
+    if len(idx) >0:
+        min_prom = np.sort(prom)[idx[0]]
+        return peaks[prom>min_prom]
     else:
-        return [], tmp, null
-    return peaks, tmp, null
+        return []
+
+
+def _pyampd(signal, adaptive_window, min_distance = None, min_prominence = None, wlen = None):
+    peaks = find_peaks_adaptive(signal, window=adaptive_window)
+    # remove violating peaks by height or distance
+    if min_prominence is not None:
+        prom,_,_  = peak_prominences(signal, peaks, wlen)
+        peaks = peaks[prom>min_prominence]
+
+    if min_distance is not None:
+        rejects = []
+        prom,_,_ = peak_prominences(signal, peaks, wlen)
+        # calculate peaks with violating intervals
+        locs = np.where(np.diff(peaks)<min_distance)[0]
+        #print(f'{len(locs)} violating peaks')
+        # get the peaks around the offending interval
+        for loc in locs:
+            local_start = np.max([0, loc-3])
+            local_end = np.min([loc+4, len(peaks)])
+            local_peaks = peaks[local_start:local_end]
+            local_prom = prom[local_start:local_end]
+            local_diff = np.where(np.diff(local_peaks)<min_distance)[0]
+            #plt.plot(signal[local_peaks[0]: local_peaks[-1]])
+            #plt.plot(local_peaks-peaks[0], signal[local_peaks], 'ro')
+            while len(local_diff  > 0):
+                # remove smallest peak
+                min_peak = local_peaks[np.argmin(local_prom)]
+                rejects.append(min_peak)
+                local_peaks = local_peaks[local_peaks != min_peak]
+                local_prom = np.delete(local_prom, local_prom.argmin())
+                # check if there are still offending intervals
+                local_diff = np.where(np.diff(local_peaks)<min_distance)[0]
+
+        rejects = np.unique(rejects)
+        peaks = peaks[~np.isin(peaks, rejects)]
+        locs = np.where(np.diff(peaks)<min_distance)[0]
+    return peaks
+    
+
+def detect_peaks(signal, adaptive_window, min_distance = 4, min_prominence = None, sensitivity=0.95, use_pyampd = True, **kwargs):
+    #peaks = find_peaks(signal,scale=adaptive_window)#_adaptive(signal, window=adaptive_window)
+    if use_pyampd:
+        peaks = _pyampd(signal, adaptive_window, min_prominence = min_prominence, **kwargs)
+    else:
+        peaks,_ = find_peaks(signal, prominence = min_prominence, **kwargs)
+    if min_distance is not None:
+        prominence, frac_illegal = illegal_intervals(signal, peaks, min_distance)
+        peaks = select_valid_peaks(peaks, prominence, frac_illegal, sensitivity)
+    return peaks
+
 
 class PickleDumpLoadMixin:
     """ Provides methods to save an object to file and to load it from file
