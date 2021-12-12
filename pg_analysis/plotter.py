@@ -313,10 +313,10 @@ class Worm(PickleDumpLoadMixin):
         # remove outliers
         sigma = kwargs.pop('sigma', 3)
         # make a copy of the signal
-        self.data['{key}_clean'] = self.data[key]
+        self.data.loc[:,f'{key}_clean'] = self.data[key]
         if w_outlier is not None:
-            self.data['{key}_clean'] = tools.hampel(self.data[f'{key}_clean'], w_outlier, sigma)
-        self.data['{key}_clean'],_ = tools.preprocess(self.data[f'{key}_clean'], w_bg, w_smooth)
+            self.data[f'{key}_clean'] = tools.hampel(self.data[f'{key}_clean'], w_outlier, sigma)
+        self.data[f'{key}_clean'],_ = tools.preprocess(self.data[f'{key}_clean'], w_bg, w_smooth)
 
 
     def calculate_property(self, name, **kwargs):
@@ -464,8 +464,8 @@ class Worm(PickleDumpLoadMixin):
         v_cms = cms[dt:]-cms[:-dt]
         t = np.array(self.data.time)
         deltat = t[dt:]-t[:-dt]
-        v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/deltat[:-1]*self.scale#*self.fps
-        v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat[:-1]*self.scale#*self.fps
+        v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/deltat*self.scale#*self.fps
+        v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat*self.scale#*self.fps
         # add back the missing item from difference
         v_nose_abs = np.append(v_nose_abs, np.nan)
         v_cms_abs = np.append(v_cms_abs, np.nan)
@@ -616,12 +616,13 @@ class Experiment(PickleDumpLoadMixin):
 
         # save metadata
         self.metadata[name] = {}
+        key = kwargs.pop('key', 'default_key')
+        self.metadata[f"{name}_{key}"] = {}
         for keyword in kwargs:
-            if "key" in kwargs:
-                self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
-            else:
-                self.metadata[name][keyword] = kwargs[keyword]
+            self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
         # run function
+        if key is not 'default_key':
+            kwargs['key'] = key
         for worm in self.samples:
              worm.calculate_property(name, **kwargs)
 
