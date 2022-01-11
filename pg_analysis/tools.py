@@ -105,7 +105,6 @@ def detect_peaks(signal, adaptive_window, min_distance = 4, min_prominence = Non
         prominence, frac_illegal = illegal_intervals(signal, peaks, min_distance)
         peaks = select_valid_peaks(peaks, prominence, frac_illegal, sensitivity)
     return peaks
-    
 
 
 class PickleDumpLoadMixin:
@@ -160,6 +159,7 @@ class PickleDumpLoadMixin:
         with open(file_path, 'wb') as f_out:
             self._set_path(file_path)
             pickle.dump(self, f_out)
+
 
 
 def lad_mplstyle():
