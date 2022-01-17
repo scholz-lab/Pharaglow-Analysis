@@ -4,7 +4,7 @@ This repository provides tools to read, analyze and export data obtained with th
 
 ## Installation
 
-The environment from PharaGlow and pharaglow needs to be installed. 
+The environment file available as environmentPumping needs to be installed. 
 
 ### Notebooks
 Use the jupyter notebook Using_pganalysis to get a sense of what the package can do.

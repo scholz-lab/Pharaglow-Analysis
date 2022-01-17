@@ -345,7 +345,7 @@ class Worm(PickleDumpLoadMixin):
                  'locations': self.calculate_locations,
         }
         if name == 'help':
-            print(funcs)
+            print(funcs.keys())
             return
         # run function
         funcs[name](**kwargs)
@@ -718,13 +718,16 @@ class Experiment(PickleDumpLoadMixin):
             data['id'] = worm.id
             if columns is None:
                 tmp = worm.data.to_dict(orient='list')
+                columns = tmp.keys()
             else:
                 tmp = worm.data.filter(columns)
                 tmp = tmp.to_dict(orient='list')
+            # if index is accicentally left in the columns - remove it
+            tmp.pop('index', '')
             # extract the t,x,y columns
             for wcon_key,inf_key in zip(['x', 'y', 't'],['x_scaled', 'y_scaled', 'time']):
-                data[wcon_key] = worm.data[inf_key].values.tolist()[:10]
-                tmp_dict['units'][wcon_key] = self.units[inf_key]
+                data[wcon_key] = worm.data[inf_key].values.tolist()
+                tmp_dict['units'][wcon_key] = worm.units[inf_key]
                 # pop duplicate keys
                 tmp.pop(inf_key, '')
             # add a custom tag in front of the custom metrics
@@ -783,7 +786,6 @@ class Experiment(PickleDumpLoadMixin):
         # save metadata
         key = kwargs.pop('key', 'default')
         self.metadata[f"{name}_{key}"] = {}
-        print(key)
         for keyword in kwargs:
             self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
 #         # run function
