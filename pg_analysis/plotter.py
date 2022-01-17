@@ -1,14 +1,20 @@
 import os
 import pickle
+import copy
 import warnings
+import yaml
+import json
 
 import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
+from scipy.stats import circmean, circstd
+from pathlib import Path
 
 from . import style
 from . import tools
 from .tools import PickleDumpLoadMixin
+
 
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
@@ -129,55 +135,43 @@ def _heatmap(x, y, ax, **kwargs):
 
 class Worm(PickleDumpLoadMixin):
     """class to contain data from a single pharaglow result."""
-    def __init__(self, filename, columns,fps, scale, particle_index = None, **kwargs):
+    def __init__(self, filename, columns, fps, scale, units, particle_index = None, load = True, **kwargs):
         """initialize object and load a pharaglow results file."""
         self.fps = fps
         self.scale = scale
         self.flag = False
-        print('Reading', filename)
+       
         # keep some metadata
         self.experiment = os.path.basename(filename)
         if particle_index is not None:
             self.particle_index = particle_index 
         else:
             self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
+        # units
+        self.columns = columns
+        self.units = units
         # load data
-        self._load(filename, columns, fps, scale, **kwargs)
-
-
+        if load:
+            print('Reading', filename)
+            self._load(filename, columns, fps, scale, **kwargs)
+         
+        
+        
     def _load(self, filename, columns, fps, scale, **kwargs):
         """load data."""
         traj = pd.read_json(filename, orient='split')
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
-        #
-        # velocity and real time
-        traj['time'] = traj['frame']/fps
-        #print(traj.info())
-        traj['velocity'] = np.sqrt((traj['x'].diff()**2+traj['y'].diff()**2))/traj['frame'].diff()*scale*fps
+        # extract the centerlines and other non-scalar values into an array instead
+        if 'Centerline' in columns:
+            self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
+        if 'Straightened' in columns:
+            self.images = np.array([np.array(im) for im in traj['Straightened']])
+        traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
+       
         self.data = traj
-        try:
-	    # pumping related data
-            if "w_bg" not in kwargs.keys():
-                kwargs["w_bg"] = 10
-                print(f'Setting Background windows to {kwargs["w_bg"]} for pump extraction')
-            if "w_sm" not in kwargs.keys():
-                kwargs["w_sm"] = 2
-                print(f'Setting smoothing windows to {kwargs["w_sm"]} for pump extraction')
-            if "sensitivity" not in kwargs.keys():
-                kwargs["sensitivity"] = 0.9
-                print(f'Setting sensitivity to {kwargs["sensitivity"]} for pump extraction')
-            if "min_distance" not in kwargs.keys():
-                kwargs["min_distance"] = 4
-                print(f'Setting peak distance to {kwargs["min_distance"]} for pump extraction')
-            self.calculate_pumps(kwargs["w_bg"], kwargs["w_sm"], kwargs["min_distance"],  kwargs["sensitivity"])
-        except Exception:
-             print('Pumping extraction failed. Try with different parameters.')
-             self.flag = True
-             self.data = traj
-        finally: 
-            # ensure numerical index
-            self.data = self.data.reset_index()
+        self.data = self.data.reset_index()
+
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -185,12 +179,18 @@ class Worm(PickleDumpLoadMixin):
 
     def __len__(self):
         return len(self.data)
+   
+        
     ######################################
     #
     #   get/set attributes
     #
     #######################################
-
+    def create_ID(self):
+        """create a unique ID matching raw data"""
+        self.id = f"{self.experiment}_{self.particle_index}"
+        
+        
     def get_metric(self, key, metric, filterfunction = None):
         """return metrics of a data column given by key.
             filterfunction: a callable that returns a boolean for each entry in the series data[key] 
@@ -210,9 +210,13 @@ class Worm(PickleDumpLoadMixin):
         if metric == "N":
             return tmp.count()
         if metric == "sem":
-           return tmp.std()/np.sqrt(tmp.count())
+            return tmp.std()/np.sqrt(tmp.count())
+        if metric == "median":
+            return tmp.median()
+        if metric == "rate":
+            return tmp.sum()/tmp.count()*self.fps
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem' , 'sum' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', or 'N'")
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -236,9 +240,12 @@ class Worm(PickleDumpLoadMixin):
         if metric == "N":
             return tmp.count(axis =1)
         if metric == "sem":
-           return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
+            return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
+        if metric == 'median':
+            return tmp.median(axis = 1)
+
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum,' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', or 'N'")
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -291,6 +298,61 @@ class Worm(PickleDumpLoadMixin):
                 return self.data[unit][self.data[events]==True].values
 
 
+    def add_column(self, key, values, overwrite = True):
+        """add a data column to the underlying datset. Will overwrite existing column names if overwrite.
+            key: name of new (or existing) column
+            values: list with the same length or series with matching index, or dict with ma
+            overwrite: replaces column if it exists.
+        """
+
+        if key in self.data.columns and not overwrite:
+            warnings.warn(f'Column {key} exists. If you want to overwrite the existing data, use overwrite = True.')
+        else:
+            if len(values) == len(self.data.index):
+                self.data[key] = values
+            else:
+                warnings.warn(f'Length of values {len(values)} does not match size of the data {len(self.data.index)}. Column was not updated.')
+    
+    ######################################
+    #
+    #   calculate additional metrics
+    #
+    #######################################
+    def preprocess_signal(self, key, w_outlier, w_bg, w_smooth, **kwargs):
+        "Use outlier removal, background subtraction and filtering to clean a signal."
+        # remove outliers
+        sigma = kwargs.pop('sigma', 3)
+        # make a copy of the signal
+        self.data.loc[:,f'{key}_clean'] = self.data[key]
+        if w_outlier is not None:
+            self.data[f'{key}_clean'] = tools.hampel(self.data[f'{key}_clean'], w_outlier, sigma)
+        self.data[f'{key}_clean'],_ = tools.preprocess(self.data[f'{key}_clean'], w_bg, w_smooth)
+        self.units[f'{key}_clean'] = self.units[key]
+
+        
+    def calculate_property(self, name, **kwargs):
+        """calculate additional properties on the whole dataset, calling functions for each worm."""
+
+        funcs = {"reversals": self.calculate_reversals,
+                "count_rate": self.calculate_count_rate,
+                "smoothed": self.calculate_smoothed,
+                "pumps": self.calculate_pumps,
+                "nose_speed": self.calculate_nose_speed,
+                "reversals_nose": self.calculate_reversals_nose,
+                "velocity":self.calculate_velocity,
+                 "time":self.calculate_time,
+                 'preprocess_signal': self.preprocess_signal,
+                 'locations': self.calculate_locations,
+        }
+        if name == 'help':
+            print(funcs.keys())
+            return
+        # run function
+        funcs[name](**kwargs)
+        # update columns
+        self.columns = self.data.columns
+
+
     def calculate_smoothed(self, key, window, aligned = False, **kwargs):
         """use rolling apply to smooth a series with the given parameters which is added as a column to the existing data.
         window: size of the rolling window.
@@ -306,18 +368,45 @@ class Worm(PickleDumpLoadMixin):
                 dset[f'{key}_smooth'] = dset[key].rolling(window, **kwargs).mean()
         else:
             self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
-
-
-    def calculate_pumps(self, w_bg, w_sm, min_distance,  sensitivity, **kwargs):
+            self.units[f'{key}_smooth'] = self.units[key]
+            
+            
+    def calculate_time(self):
+        """calculate time from frame index."""
+        # real time
+        self.data['time'] = self.data['frame']/self.fps
+        self.units['time'] = self.units['time_units']
+    
+    
+    def calculate_locations(self):
+        """calculate correctly scaled x,y coordinates."""
+        # real time
+        self.data['x_scaled'] = self.data['x']*self.scale
+        self.data['y_scaled'] = self.data['y']*self.scale
+        self.units['x_scaled'] = self.units['space_units']
+        self.units['y_scaled'] = self.units['space_units']
+        try:
+            self.centerline_scaled = self.centerline*self.scale
+            self.units['centerline_scaled'] = self.units['space_units']
+        except AttributeError:
+            pass
+            
+        
+    def calculate_velocity(self, units):
+        """calculate velocity from the coordinates."""
+        #TODO allow dt for velocity calculation
+        try:
+            velocity= np.sqrt((self.data['x'].diff()**2+self.data['y'].diff()**2))/self.data['frame'].diff()*self.scale*self.fps
+            self.data['velocity'] = velocity
+            self.units['velocity'] = units
+        except KeyError:
+            print('Velocity calculation failed. Continuing.')
+        
+        
+    def calculate_pumps(self, min_distance,  sensitivity, adaptive_window, min_prominence = 0, key = 'pump_clean', use_pyampd = True):
         """using a pump trace, get additional pumping metrics."""
-        # remove outliers
-        self.data['pump_clean'] = tools.hampel(self.data['pumps'], w_bg*30)
-        self.data['pump_clean'],_ = tools.preprocess(self.data['pump_clean'], w_bg, w_sm)
-        # deal with heights for the expected peaks
-        ### here we make the heights sensible: threshold between median and maximum of trace
-        h = np.linspace(self.data['pump_clean'].median(), self.data['pump_clean'].max(), 50)
-        heights = kwargs.pop('heights', h)
-        peaks, _,_  = tools.find_pumps(self.data['pump_clean'], min_distance=min_distance,  sensitivity=sensitivity, heights = heights)
+        signal = self.data[key]
+        peaks = tools.detect_peaks(signal, adaptive_window, min_distance, min_prominence, sensitivity, use_pyampd)
         if len(peaks)>0:
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
@@ -327,17 +416,20 @@ class Worm(PickleDumpLoadMixin):
         else:
             self.data['rate'] = 0
             self.data['pump_events'] = 0
+        self.units['rate'] = f"1/{self.units['time']}"
+        self.units['pump_events'] = "1"
 
         
-    def calculate_count_rate(self, window, **kwargs):
+    def calculate_count_rate(self, window, key = 'pump_events',  **kwargs):
         """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
         window is in frame. Result will be in Hz."""
         kwargs['center'] =  kwargs.pop('center', True)
         kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
-        self.data['count_rate'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+        self.data[f'count_rate_{key}'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+        self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
-    def calculate_reversals(self, animal_size, angle_treshold):
+    def calculate_reversals(self, animal_size, angle_threshold):
         """Adaptation of the Hardaker's method to detect reversal event. 
         A single worm's centroid trajectory is re-sampled with a distance interval equivalent to 1/10 
         of the worm's length (100um) and then reversals are calculated from turning angles.
@@ -359,7 +451,7 @@ class Worm(PickleDumpLoadMixin):
             idx = distance.sub(level).abs().idxmin()
             indices.append(idx)
         # create a downsampled trajectory from these indices
-        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()
+        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()*self.scale
         # we ignore the index here for the shifted data
         traj_Resampled[['x1', 'y1']] = traj_Resampled.shift(1).fillna(0)
         # use the dot product to calculate the andle
@@ -368,11 +460,91 @@ class Worm(PickleDumpLoadMixin):
             v2 = [row.x1, row.y1]
             return np.degrees(np.arccos(np.dot(v1, v2)/np.linalg.norm(v1)/np.linalg.norm(v2)))
         traj_Resampled['angle'] = traj_Resampled.apply(lambda row: angle(row), axis =1)
-        rev = traj_Resampled.index[traj_Resampled.angle>=angle_treshold]
+        rev = traj_Resampled.index[traj_Resampled.angle>=angle_threshold]
         self.data['reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
-    
+        # units
+        self.units['reversals'] = '1'
+     
 
+    def calculate_reversals_nose(self, dt =1, angle_threshold = 150, w_smooth = 30, min_duration = 30):
+        """using the motion of the nosetip relative to the center of mass motion to determine reversals."""
+        
+        try:
+            cl = self.centerline
+        except AttributeError:
+            warnings.warn('data does not contain centerlines.')
+            return
+        cms = np.stack([self.data.x, self.data.y]).T
+        # trajectories - CMS - coarse-grain
+        # check the number of points of each centerline
+        nPts = len(cl[0])
+        # note, the centerline is ordered y,x
+        # subtract the mean since the cl is at (50,50) or similar
+        yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
+        cl_new = np.stack([xc, yc]).T + np.repeat(cms[:,np.newaxis,:], nPts, axis = 1)
+        nose = cl_new[:,0,:]
+        #calculate directions - in the lab frame! and with dt
+        v_nose = nose[dt:]-nose[:-dt]
+        #v_cms = cms[dt:]-cms[:-dt]
+        # tangent of the worm = 'heading'
+        heading = cl_new[:,0,]-cl_new[:,nPts//2,]
+        
+        # angle relative to cms motion
+        angle = np.array([np.arccos(np.dot(v1, v2)/(np.linalg.norm(v2)*np.linalg.norm(v1)))*180/np.pi for \
+                          (v1, v2) in zip(v_nose, heading)])
+        angle = pd.Series(angle).rolling(w_smooth, min_periods=1, center=True).apply(circmean, args=(180, 0))
+        angle[np.isnan(angle)] = 0
+        angle = np.append(angle, [np.nan]*dt)
+        self.add_column('angle_nose', angle, overwrite = True)
+        # determine when angle is over threshold
+        rev = angle > angle_threshold
+        # filter short reversals
+        rev = pd.Series(rev).rolling(2*min_duration, center=True).median()
+        #rev = np.append(rev, [np.nan]*dt)
+        self.add_column('reversals_nose', rev, overwrite = True)
+        # add reversal events (1 where a reversal starts)
+        reversal_start = np.diff(np.array(rev, dtype=int))==1
+        reversal_start = np.append(reversal_start, [0])
+        self.add_column('reversal_events_nose', reversal_start, overwrite = True)
+        # add units
+        self.units['angle_nose'] = 'degrees'
+        self.units['reversal_events_nose'] = '1'
+        self.units['reversals_nose'] = '1'
+        
+
+    def calculate_nose_speed(self, dt = 1):
+        """Calculate the cms and nose velocities. """
+        try:
+            cl = self.centerline
+        except AttributeError:
+            warnings.warn('data does not contain centerlines.')
+            return
+        # trajectories - CMS - coarse-grain
+        cms = np.stack([self.data.x, self.data.y]).T
+        # note, the centerline is ordered y,x
+        # subtract the mean since the cl is at (50,50)
+        yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
+        cl_new = np.stack([xc, yc]).T + np.repeat(cms[:,np.newaxis,:], 100, axis = 1)
+        nose = cl_new[:,0,:]
+        #calculate directions - in the lab frame! and with dt
+        v_nose = nose[dt:]-nose[:-dt]
+        v_cms = cms[dt:]-cms[:-dt]
+        t = np.array(self.data.time)
+        deltat = t[dt:]-t[:-dt]
+        v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/deltat*self.scale#*self.fps
+        v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat*self.scale#*self.fps
+        # add back the missing item from difference
+        v_nose_abs = np.append(v_nose_abs, np.nan)
+        v_cms_abs = np.append(v_cms_abs, np.nan)
+        # add to data
+        self.add_column('nose_speed', v_nose_abs, overwrite = True)
+        self.add_column('cms_speed', v_cms_abs, overwrite = True)
+        # add units
+        self.units['nose_speed'] = units['space']/units['time']
+        self.units['cms_speed'] = units['space']/units['time']
+
+        
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
         """align to a timepoint.
          Inputs:
@@ -417,7 +589,7 @@ class Worm(PickleDumpLoadMixin):
 class Experiment(PickleDumpLoadMixin):
     """Wrapper class which is a container for individual worms."""
     # class attributes
-    def __init__(self, strain, condition, scale, fps, samples = None, color = None):
+    def __init__(self, strain, condition, scale, fps, scale_units = None, fps_units = None, samples = None, color = None):
         self.strain = strain
         self.condition = condition
         self.scale = scale
@@ -429,8 +601,17 @@ class Experiment(PickleDumpLoadMixin):
         else:
             self.samples = samples[:]
         self.color = color
-        
-    
+        # units
+        if scale_units is None:
+            self.space_units = 'um'
+        else:
+            self.space_units = scale_units
+        if fps_units is None:
+            self.time_units = 's'
+        else:
+            self.time_units =  fps_units
+
+            
     def __repr__(self):
         return f"Experiment \n Strain: {self.strain},\n Condition: {self.condition}\n N = {len(self.samples)}."
     
@@ -449,14 +630,14 @@ class Experiment(PickleDumpLoadMixin):
         if isinstance(key, slice):
             # do your handling for a slice object:
             samples = self.samples[key.start:key.stop:key.step]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = samples)
+            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = samples.copy())
         elif isinstance( key, int ):
             if key < 0 : #Handle negative indices
                 key += len( self )
             if key < 0 or key >= len(self) :
                 raise IndexError(f"The index ({key}) is out of range.")
             sample = self.samples[key]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample])
+            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample].copy())
         else:
             raise TypeError("Invalid argument type.")
     ######################################
@@ -464,7 +645,7 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = ['x', 'y', 'frame', 'pumps'], append = True, nmax = None, filterword = None, **kwargs):
+    def load_data(self, path, columns = None, append = True, nmax = None, filterword = "", units = None, **kwargs):
         """load all results files from a folder. 
             Inputs:
                 path: location of pharaglow results files
@@ -472,7 +653,27 @@ class Experiment(PickleDumpLoadMixin):
             Params: 
                 append: append to existing samples. If False, start with an empty experiment.
         """
+        if columns is None:
+             columns = ['x', 'y', 'frame', 'pumps']
+        # unit definitions
+        if isinstance(units, str) or isinstance(units, Path):
+            with open(units) as stream:
+                try:
+                    self.units = yaml.safe_load(stream)
+                except yaml.YAMLError as exc:
+                    print(exc)
+        elif isinstance(units, dict):
+            self.units = units
+        else:
+            raise RuntimeError('Specify units or config file containing units!')
+        # check if we have units for all columns
+        if not set(columns)<=set(self.units):
+            raise IndexError(f"Units are not specified for all columns {set(self.units)}.")
+        # add the units for scale and fps
+        self.units['space_units'] = self.space_units
+        self.units['time_units'] = self.time_units
         
+        # load stuff
         if nmax == None:
             nmax = np.inf
         if not append:
@@ -483,15 +684,95 @@ class Experiment(PickleDumpLoadMixin):
             if j >= nmax:
                 break
             if os.path.isfile(file) and filterword in fn and fn.endswith('.json'):
-                self.samples.append(Worm(file, columns, self.fps, self.scale, **kwargs))
+                self.samples.append(Worm(file, columns, self.fps, self.scale, self.units, **kwargs))
                 j += 1
-                
+    
+    
+    def save_wcon(self, filepath, columns = None, tag = '@INF'):
+        """ Save the Experiment as a valid wcon json file.
 
+        Args:
+            file_path (str) : Path to the output file. should end in .wcon
+            
+        Returns:
+            -
+        """
+        tmp_dict = {}
+        ### create correct structure for wcon
+            # units for each column
+        tmp_dict['units'] = {}
+       
+        # experimental metadata
+        try:
+            tmp_dict['metadata'] = self.experiment_metadata
+        except KeyError:
+            print('Please define the experimental metadata first by providing a dictionary to self.define_metadata.')
+        
+        # get the scaled coordinates
+        self.calculate_property('locations')
+        # get each worm as data    
+        tmp_dict['data'] = []
+        for worm in self.samples:
+            data = {}
+            worm.create_ID()
+            data['id'] = worm.id
+            if columns is None:
+                tmp = worm.data.to_dict(orient='list')
+                columns = tmp.keys()
+            else:
+                tmp = worm.data.filter(columns)
+                tmp = tmp.to_dict(orient='list')
+            # if index is accicentally left in the columns - remove it
+            tmp.pop('index', '')
+            # extract the t,x,y columns
+            for wcon_key,inf_key in zip(['x', 'y', 't'],['x_scaled', 'y_scaled', 'time']):
+                data[wcon_key] = worm.data[inf_key].values.tolist()
+                tmp_dict['units'][wcon_key] = worm.units[inf_key]
+                # pop duplicate keys
+                tmp.pop(inf_key, '')
+            # add a custom tag in front of the custom metrics
+            data[tag] = tmp
+            # add the units for our custom tags
+            for key in tmp:
+                tmp_dict['units'][key] = self.units[key]
+            tmp_dict['data'].append(data)
+            # add centerlines
+            if any([key in columns for key in ['Centerline' ,'centerline']]):
+                data[tag]['centerline_x'] = worm.centerline_scaled[:,:,1].tolist()
+                data[tag]['centerline_y'] = worm.centerline_scaled[:,:,0].tolist()
+                tmp_dict['units']['centerline_x'] = worm.units['centerline_scaled']
+                tmp_dict['units']['centerline_y'] = worm.units['centerline_scaled']
+        # write data
+        with open(filepath, 'w', encoding='utf-8') as f:
+            # dump as json
+            json.dump(tmp_dict, f, ensure_ascii=False, indent=4)
+            
+            
+    def define_metadata(self, info):
+        """Add experimental metadata e.g., temperature, detailed conditions,...."""
+        if isinstance(info, dict):
+            self.experiment_metadata = info
+        else:
+            raise RuntimeError('info should be a dictionary.')
+        assert self.experiment_metadata['strain'] == self.strain, 'Ensure that the strain definition in the metadata matches the strain name in the Experiment!'
+
+            
     def load_stimulus(self, filename):
         """load a stimulus file"""
         #TODO test and adapt
         self.stimulus = np.loadtxt(filename)
     
+    
+    def add_column(self, key, values, overwrite = True):
+        """add a column of data to each worm. 
+            key: name of new (or existing) column
+            values: Array or List containing the values added to each sample in the experiment.
+            overwrite: overwrite column if it exists.
+        """
+        assert len(values) == len(self.samples), f'Number of values provided {len(values)} does not match the number of samples in the experiment {len(self.samples)}.'
+        for n, worm in enumerate(self.samples):
+            worm.add_column(key, values[n], overwrite)
+
 
     def align_data(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
         """calculate aligned data for all worms"""
@@ -499,37 +780,21 @@ class Experiment(PickleDumpLoadMixin):
             worm.multi_align(timepoints, tau_before, tau_after, key = key, column_align = column_align)
 
 
-    def calculate_reversals(self, animal_size, angle_treshold):
-        """calculate the reversals for each worm"""
-        self.metadata['animal_size'] = animal_size
-        self.metadata['angle_threshold'] = angle_treshold
-        for worm in self.samples:
-            worm.calculate_reversals(animal_size, angle_treshold)
-    
+    def calculate_property(self, name, **kwargs):
+        """calculate additional properties on the whole dataset, calling functions for each worm."""
 
-    def calculate_pumps(self, w_bg =10, w_sm = 2, min_distance = 5,  sensitivity = 0.95, **kwargs):
-        """calculate the pumps for each worm"""
-        for key, value in zip(['w_bg', 'w_sm', 'min_distance', 'sensitivity'], [w_bg, w_sm, min_distance, sensitivity]):
-            self.metadata[key] = value
-        for worm in self.samples:
-            worm.calculate_pumps(w_bg, w_sm , min_distance, sensitivity, **kwargs)
-    
-
-    def calculate_count_rate(self, window,**kwargs):
-        """calculate the reversals for each worm"""
-        self.metadata['count_rate_window'] = window
-        for worm in self.samples:
-            worm.calculate_count_rate(window,**kwargs)
-    
-
-    def calculate_smoothed(self, key, window, aligned = False, **kwargs):
-        """calculate smoothing for each worm."""
-
-        self.metadata['smoothing_window'] = window
+        # save metadata
+        key = kwargs.pop('key', 'default')
+        self.metadata[f"{name}_{key}"] = {}
         for keyword in kwargs:
-            self.metadata[f'smoothing_{keyword}'] = kwargs[keyword]
+            self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
+#         # run function
+        if key is not 'default':
+            kwargs['key'] = key
         for worm in self.samples:
-            worm.calculate_smoothed(key, window, aligned, **kwargs)
+             worm.calculate_property(name, **kwargs)
+
+   
     ######################################
     #
     #   get/set attributes
@@ -576,9 +841,11 @@ class Experiment(PickleDumpLoadMixin):
         if metric == "N":
             return tmp.count(axis = axis)
         if metric == "sem":
-           return tmp.std(axis = axis)/self.get_sample_metric(key, 'N', axis=axis)**0.5
+            return tmp.std(axis = axis)/self.get_sample_metric(key, 'N', axis=axis)**0.5
+        if metric == "rate":
+            return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
         if metric == "collapse":
-            return pd.DataFrame(tmp.values.ravel())
+            return pd.DataFrame(tmp.values.ravel(), columns = [key])
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
 
@@ -615,9 +882,9 @@ class Experiment(PickleDumpLoadMixin):
         if metric_sample == "N":
             return tmp.count(axis = axis)
         if metric_sample == "sem":
-           return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
+            return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
-            return pd.DataFrame(tmp.values.ravel())
+            return pd.DataFrame(tmp.values.ravel(), columns=[key])
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
     
