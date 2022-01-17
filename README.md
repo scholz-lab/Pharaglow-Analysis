@@ -1,10 +1,37 @@
 # Pharaglow Analysis
-This repository provides tools to read, analyze and export data obtained with the pharaglow worm tracker.
+This repository provides tools to read, analyze and export data obtained with the pharaglow worm tracker https://scholz-lab.github.io/PharaGlow/
+
+* read basic tracking data from Pharaglow or similar (worm) tracking sources
+* organize datasets into 'Experiments' with experimental and analysis metadata
+*
+
 
 
 ## Installation
+- This assumes you have a computer with python or ideally anaconda available
+- Clone or download the repository:
+```
+git clone https://github.com/scholz-lab/PharaGlow.git
+```
 
-The environment file available as environmentPumping needs to be installed. 
+- Create and activate the required anaconda environment
+In the terminal (Linux)/Anaconda Command Prompt (Windows),
+ navigate to the Pharaglow-Analysis directory
+ and run:
+
+    ```bash
+    conda env create --file environmentPumping.yml
+    ```
+
+    You can now use this environment by running:
+
+    ```
+    conda activate pumping
+    ```
+- install the package by running 
+```
+python setup.py install --user
+```
 
 ### Notebooks
 Use the jupyter notebook Using_pganalysis to get a sense of what the package can do.
@@ -35,7 +62,7 @@ control = pga.Experiment(strain='GRU101', condition='Entry', scale=2.34, fps = 3
 #control.load_data('~/TestOutput_MS0006/')
 
 # ... or load from a previously pickled Experiment object.
-control = pga.Experiment.load('Test')
+control = pga.Experiment.load('data/Test')
 #control = pga.Experiment.load('LawnEntryPickle_May')
 ```
 
@@ -221,7 +248,7 @@ control.plot(plt.gca(), ('x', 'y'), metric = None, plot_type = 'line', color = '
 ```
 
 
-![png](output_22_0.png)
+![png](images/output_22_0.png)
 
 
 ### 5. Getting data out
@@ -265,7 +292,7 @@ plt.tight_layout()
 
 
 
-![png](output_24_1.png)
+![png](images/output_24_1.png)
 
 
 ### 5. Plotting utilities
@@ -301,7 +328,7 @@ for ax, txt in zip(fig.axes, ['Line with error', 'Box plot with samples', 'Scatt
     ax.set_ylabel('key_y')
 ```
 
-![png](output_27_1.png)
+![png](images/output_27_1.png)
 
 
 #### Box plots - summary stats
@@ -327,7 +354,7 @@ plt.show()
 ```
 
 
-![png](output_29_0.png)
+![png](images/output_29_0.png)
 
 
 #### 2D - density and lineplots
@@ -348,7 +375,7 @@ plt.tight_layout()
 ```
 
 
-![png](output_31_1.png)
+![png](images/output_31_1.png)
 
 
 #### Scatter in multiple plots
@@ -374,7 +401,7 @@ plt.tight_layout()
 ```
 
 
-![png](output_33_0.png)
+![png](images/output_33_0.png)
 
 
 #### Timeseries
@@ -392,7 +419,7 @@ control.plot(ax2, 'velocity', metric = None, alpha = 0.05, aligned = True);
 ```
 
 
-![png](output_35_0.png)
+![png](images/output_35_0.png)
 
 
 #### Event plots
@@ -410,7 +437,7 @@ plt.setp(axes, ylabel='pump_events', xlabel = 'time (s)')
 plt.tight_layout()
 ```
 
-![png](output_37_0.png)
+![png](images/output_37_0.png)
 
 
 ```python
@@ -425,7 +452,7 @@ plt.setp(axes, ylabel='reversals', xlabel = 'time (s)')
 plt.tight_layout()
 ```
 
-![png](output_38_0.png)
+![png](images/output_38_0.png)
 
 
 ```python
