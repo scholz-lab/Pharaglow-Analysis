@@ -710,6 +710,19 @@ class Experiment(PickleDumpLoadMixin):
         
         # get the scaled coordinates
         self.calculate_property('locations')
+        # update units
+        self.update_units()
+        # store the fps and scale information
+        tmp_dict['metadata']['@imaging_setup'] = {}
+        tmp_dict['metadata']['@imaging_setup']['scale'] = self.scale
+        tmp_dict['metadata']['@imaging_setup']['fps'] = self.fps
+        tmp_dict['units']['scale'] = f"{self.units['space_units']}/px"
+        tmp_dict['units']['fps'] = f"1/{self.units['time_units']}"
+        # add units to some metadata entries
+        for key in tmp_dict['metadata']:
+            if key in self.units.keys():
+                tmp_dict['units'][key] = self.units[key]
+        
         # get each worm as data    
         tmp_dict['data'] = []
         for worm in self.samples:
@@ -748,15 +761,27 @@ class Experiment(PickleDumpLoadMixin):
             json.dump(tmp_dict, f, ensure_ascii=False, indent=4)
             
             
-    def define_metadata(self, info):
+    def define_metadata(self, info, units = None):
         """Add experimental metadata e.g., temperature, detailed conditions,...."""
+        
         if isinstance(info, dict):
+            assert info['strain'] == self.strain, 'Ensure that the strain definition in the metadata matches the strain name in the Experiment!'
             self.experiment_metadata = info
+            if isinstance(units, dict):
+                z = {**self.units, **units}
+                self.units = z
         else:
             raise RuntimeError('info should be a dictionary.')
-        assert self.experiment_metadata['strain'] == self.strain, 'Ensure that the strain definition in the metadata matches the strain name in the Experiment!'
-
+    
+    
+    def update_units(self):
+        """Synchronize units with all worm sample units."""
+        old_units = self.units
+        for worm in self.samples:
+            old_units = {**old_units, **worm.units}
+        self.units = old_units
             
+        
     def load_stimulus(self, filename):
         """load a stimulus file"""
         #TODO test and adapt
@@ -842,12 +867,14 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.count(axis = axis)
         if metric == "sem":
             return tmp.std(axis = axis)/self.get_sample_metric(key, 'N', axis=axis)**0.5
+        if metric == "median":
+            return tmp.median(axis = axis)
         if metric == "rate":
             return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
         if metric == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns = [key])
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median' or 'N'")
 
 
     def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
@@ -881,12 +908,14 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.std(axis = axis)
         if metric_sample == "N":
             return tmp.count(axis = axis)
+        if metric_sample == "median":
+            return tmp.median(axis = axis)
         if metric_sample == "sem":
             return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns=[key])
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median' or 'N'")
     
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
