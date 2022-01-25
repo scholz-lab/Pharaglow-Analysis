@@ -541,8 +541,8 @@ class Worm(PickleDumpLoadMixin):
         self.add_column('nose_speed', v_nose_abs, overwrite = True)
         self.add_column('cms_speed', v_cms_abs, overwrite = True)
         # add units
-        self.units['nose_speed'] = units['space']/units['time']
-        self.units['cms_speed'] = units['space']/units['time']
+        self.units['nose_speed'] = self.units['space']/self.units['time']
+        self.units['cms_speed'] = self.units['space']/self.units['time']
 
         
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
