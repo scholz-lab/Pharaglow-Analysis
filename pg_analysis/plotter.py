@@ -392,13 +392,17 @@ class Worm(PickleDumpLoadMixin):
             pass
             
         
-    def calculate_velocity(self, units):
+    def calculate_velocity(self, units=None):
         """calculate velocity from the coordinates."""
         #TODO allow dt for velocity calculation
         try:
             velocity= np.sqrt((self.data['x'].diff()**2+self.data['y'].diff()**2))/self.data['frame'].diff()*self.scale*self.fps
             self.data['velocity'] = velocity
+            
+            if units is None:
+                units = f"{self.units['space_units']}/{self.units['time_units']}"
             self.units['velocity'] = units
+
         except KeyError:
             print('Velocity calculation failed. Continuing.')
         
@@ -541,8 +545,8 @@ class Worm(PickleDumpLoadMixin):
         self.add_column('nose_speed', v_nose_abs, overwrite = True)
         self.add_column('cms_speed', v_cms_abs, overwrite = True)
         # add units
-        self.units['nose_speed'] = self.units['space']/self.units['time']
-        self.units['cms_speed'] = self.units['space']/self.units['time']
+        self.units['nose_speed'] = self.units['space_units']/self.units['time_units']
+        self.units['cms_speed'] = self.units['space_units']/self.units['time_units']
 
         
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
