@@ -539,14 +539,14 @@ class Worm(PickleDumpLoadMixin):
         v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/deltat*self.scale#*self.fps
         v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat*self.scale#*self.fps
         # add back the missing item from difference
-        v_nose_abs = np.append(v_nose_abs, np.nan)
-        v_cms_abs = np.append(v_cms_abs, np.nan)
+        v_nose_abs = np.append(v_nose_abs, [np.nan]*dt)
+        v_cms_abs = np.append(v_cms_abs, [np.nan]*dt)
         # add to data
         self.add_column('nose_speed', v_nose_abs, overwrite = True)
         self.add_column('cms_speed', v_cms_abs, overwrite = True)
         # add units
-        self.units['nose_speed'] = self.units['space_units']/self.units['time_units']
-        self.units['cms_speed'] = self.units['space_units']/self.units['time_units']
+        self.units['nose_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
+        self.units['cms_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
 
         
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
@@ -959,7 +959,7 @@ class Experiment(PickleDumpLoadMixin):
         xerr = None
         yerr = None
         if aligned:
-            # time is not menaingful, choose a different key
+            # time is not meaningful, choose a different key
             if key_x == 'time':
                 key_x = 'time_align'
             x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
