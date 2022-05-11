@@ -215,8 +215,12 @@ class Worm(PickleDumpLoadMixin):
             return tmp.median()
         if metric == "rate":
             return tmp.sum()/tmp.count()*self.fps
+        if metric == 'max':
+            return tmp.max()
+        if metric == 'min':
+            return tmp.min()
         else:
-            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N'")
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -243,9 +247,12 @@ class Worm(PickleDumpLoadMixin):
             return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
         if metric == 'median':
             return tmp.median(axis = 1)
-
+        if metric == 'max':
+            return tmp.max(axis = 1)
+        if metric == 'min':
+            return tmp.min(axis = 1)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', 'max', 'min' or 'N'")
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -841,10 +848,9 @@ class Experiment(PickleDumpLoadMixin):
 
     def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = False):
         """ Metrics across samples as a function of time (axis=1) or averaged over time a function of samples (axis = 0).
-            metric: one of 'mean', 'std', 'N' or 'sem.'
+            metric: one of 'sum', 'mean', 'std', 'N', 'sem', 'median', rate', 'collapse', 'max' or 'min'
             filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             axis: axis = 1 - returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged/metric of each sample in the data.
-
         """
         tmp = []
         for worm in self.samples:
@@ -873,8 +879,12 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
         if metric == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns = [key])
+        if metric == 'max':
+            return tmp.max(axis = 1)
+        if metric == 'min':
+            return tmp.min(axis = 1)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
 
 
     def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
@@ -914,8 +924,12 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns=[key])
+        if metric == 'max':
+            return tmp.max(axis = 1)
+        if metric == 'min':
+            return tmp.min(axis = 1)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
     
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
