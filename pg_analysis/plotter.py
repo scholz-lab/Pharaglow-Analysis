@@ -372,10 +372,11 @@ class Worm(PickleDumpLoadMixin):
         if aligned:
             assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
             for dset in self.aligned_data:
-                dset[f'{key}_smooth'] = dset[key].rolling(window, **kwargs).mean()
+                dset[f'smoothed_{key}'] = dset[key].rolling(window, **kwargs).mean()
         else:
-            self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
-            self.units[f'{key}_smooth'] = self.units[key]
+            self.data[f'smoothed_{key}'] = self.data[key].rolling(window, **kwargs).mean()
+            self.units[f'smoothed_{key}'] = self.units[key]
+
             
             
     def calculate_time(self):
