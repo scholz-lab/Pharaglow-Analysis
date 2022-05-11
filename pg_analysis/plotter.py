@@ -427,12 +427,12 @@ class Worm(PickleDumpLoadMixin):
         self.units['pump_events'] = "1"
 
         
-    def calculate_count_rate(self, window, key = 'pump_events',  **kwargs):
-        """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
+    def calculate_count_rate(self, window, key='pump_events', **kwargs):
+        """Add a column 'count_rate' to self.data. Calculate a rate based on the number of binary events in a window. 
         window is in frame. Result will be in Hz."""
         kwargs['center'] =  kwargs.pop('center', True)
         kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
-        self.data[f'count_rate_{key}'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+        self.data[f'count_rate_{key}'] = self.data[key].rolling(window, **kwargs).sum()/window*self.fps
         self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
