@@ -1029,10 +1029,19 @@ class Experiment(PickleDumpLoadMixin):
             loc = kwargs.pop('loc', 0)
             plot = ax.bar(loc, y, label = self.strain, **kwargs)
 
+        # elif plot_type == 'box':
+        #     loc = kwargs.pop('loc', 0)
+        #     color = kwargs.pop('color', self.color)
+        #     plot = style.scatterBoxplot(ax, [loc], [y], [color], [self.strain], **kwargs)
+            
         elif plot_type == 'box':
             loc = kwargs.pop('loc', 0)
             color = kwargs.pop('color', self.color)
-            plot = style.scatterBoxplot(ax, [loc], [y], [color], [self.strain], **kwargs)
+            lbls = kwargs.pop('lbls', self.strain)
+            plot = style.scatterBoxplot(ax,  x_data = [loc], y_data = [y], clrs = [color], lbls=[lbls], **kwargs)
+           
+            
+            
         else:
              raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
         return plot, x, y
