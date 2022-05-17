@@ -341,16 +341,16 @@ class Worm(PickleDumpLoadMixin):
         """calculate additional properties on the whole dataset, calling functions for each worm."""
 
         funcs = {"reversals": self.calculate_reversals,
-                "count_rate": self.calculate_count_rate,
-                "smoothed": self.calculate_smoothed,
-                "pumps": self.calculate_pumps,
-                "nose_speed": self.calculate_nose_speed,
-                "reversals_nose": self.calculate_reversals_nose,
-                "velocity":self.calculate_velocity,
+                 "count_rate": self.calculate_count_rate,
+                 "smoothed": self.calculate_smoothed,
+                 "pumps": self.calculate_pumps,
+                 "nose_speed": self.calculate_nose_speed,
+                 "reversals_nose": self.calculate_reversals_nose,
+                 "velocity":self.calculate_velocity,
                  "time":self.calculate_time,
-                 'preprocess_signal': self.preprocess_signal,
-                 'locations': self.calculate_locations,
-        }
+                 "preprocess_signal": self.preprocess_signal,
+                 "locations": self.calculate_locations,
+                }
         if name == 'help':
             print(funcs.keys())
             return
@@ -881,9 +881,9 @@ class Experiment(PickleDumpLoadMixin):
         if metric == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns = [key])
         if metric == 'max':
-            return tmp.max(axis = 1)
+            return tmp.max(axis = axis)
         if metric == 'min':
-            return tmp.min(axis = 1)
+            return tmp.min(axis = axis)
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
 
@@ -925,10 +925,10 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns=[key])
-        if metric == 'max':
-            return tmp.max(axis = 1)
-        if metric == 'min':
-            return tmp.min(axis = 1)
+        if metric_sample == 'max':
+            return tmp.max(axis = axis)
+        if metric_sample == 'min':
+            return tmp.min(axis = axis)
         else:
             raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
     
