@@ -553,7 +553,7 @@ class Worm(PickleDumpLoadMixin):
         self.units['cms_speed'] = units['space']/units['time']
 
         
-    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
+    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame', **kwargs):
         """align to a timepoint.
          Inputs:
                 timepoint: time to align to in frames
@@ -572,7 +572,12 @@ class Worm(PickleDumpLoadMixin):
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
         tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
-        tmp['time_align'] = tmp.index.values/self.fps
+        rescale_time = kwargs.pop(' rescale_time ', ('Time' in column_align)|('time' in column_align))
+        
+        if rescale_time:
+            tmp['time_align'] = tmp.index.values/self.fps
+        else:
+            tmp['time_align'] = tmp.index.values
         return tmp
     
 
