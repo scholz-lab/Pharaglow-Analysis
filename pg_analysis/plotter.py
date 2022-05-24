@@ -553,7 +553,7 @@ class Worm(PickleDumpLoadMixin):
         self.units['cms_speed'] = units['space']/units['time']
 
         
-    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame', **kwargs):
+    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'): # , **kwargs)
         """align to a timepoint.
          Inputs:
                 timepoint: time to align to in frames
@@ -572,12 +572,14 @@ class Worm(PickleDumpLoadMixin):
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
         tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
-        rescale_time = kwargs.pop(' rescale_time ', ('Time' in column_align)|('time' in column_align))
+        tmp['time_align'] = tmp.index.values/self.fps
         
-        if rescale_time:
-            tmp['time_align'] = tmp.index.values/self.fps
-        else:
-            tmp['time_align'] = tmp.index.values
+#         rescale_time = kwargs.pop(' rescale_time ', ('Time' in column_align)|('time' in column_align))
+        
+#         if rescale_time:
+#             tmp['time_align'] = tmp.index.values/self.fps
+#         else:
+#             tmp['time_align'] = tmp.index.values
         return tmp
     
 
@@ -873,6 +875,8 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.sum(axis = axis)
         if metric == "mean":
             return tmp.mean(axis = axis)
+        if metric == "mean_%":
+            return tmp.mean(axis=1)*100
         if metric == "std":
             return tmp.std(axis = axis)
         if metric == "N":
@@ -890,7 +894,7 @@ class Experiment(PickleDumpLoadMixin):
         if metric == 'min':
             return tmp.min(axis = axis)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','mean_%', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
 
 
     def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
@@ -920,6 +924,8 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.sum(axis = axis)
         if metric_sample == "mean":
             return tmp.mean(axis = axis)
+        if metric_sample == "mean_%":
+            return tmp.mean(axis = axis)*100
         if metric_sample == "std":
             return tmp.std(axis = axis)
         if metric_sample == "N":
@@ -935,7 +941,7 @@ class Experiment(PickleDumpLoadMixin):
         if metric_sample == 'min':
             return tmp.min(axis = axis)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'mean_%', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
     
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
@@ -957,7 +963,7 @@ class Experiment(PickleDumpLoadMixin):
     def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  **kwargs):
         """plot the experiment.
             keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
-            metric_sample: is the function applied across the worms in this experiment.
+            metric_sample: is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_sample_x and metric_sample_y (=[''mean','N'])
             metric: is the function applied across time (or stimuli for aligned data)
             filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             aligned: Use self.samples.aligned_data or self.samples.data
@@ -974,12 +980,24 @@ class Experiment(PickleDumpLoadMixin):
             raise ValueError(f'The entry for keys {keys} is not valid.')
         xerr = None
         yerr = None
+        
+        
+        if metric_sample == None:
+            metric_sample_x = None
+            metric_sample_y = None
+        elif isinstance(metric_sample, str):
+            metric_sample_x = metric_sample
+            metric_sample_y = metric_sample
+        else:
+            metric_sample_x = metric_sample[0]
+            metric_sample_y = metric_sample[1]
+            
         if aligned:
             # time is not menaingful, choose a different key
             if key_x == 'time':
                 key_x = 'time_align'
-            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
-            y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
+            x = self.get_aligned_sample_metric(key_x, metric_sample_x, metric, filterfunction, axis)
+            y = self.get_aligned_sample_metric(key_y, metric_sample_y, metric, filterfunction, axis)
                 
             if metric_error is not None:
                 xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction, axis)
@@ -999,8 +1017,8 @@ class Experiment(PickleDumpLoadMixin):
             elif metric == None:
                 # return the metric across each trajectory(Worm) - result will be an average across samples
                 warnings.warn('This option keeps the dataframe index while applying the sample metric which is rarely meaningful. You probably want to align all datasets to their t=0 and rerun with the aligned option.')
-                x = self.get_sample_metric(key_x, metric_sample, filterfunction, axis = 1)
-                y = self.get_sample_metric(key_y, metric_sample, filterfunction, axis = 1)
+                x = self.get_sample_metric(key_x, metric_sample_x, filterfunction, axis = 1)
+                y = self.get_sample_metric(key_y, metric_sample_y, filterfunction, axis = 1)
                 if metric_error is not None:
                     xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis = 1)
                     yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis = 1)
