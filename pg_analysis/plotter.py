@@ -372,10 +372,10 @@ class Worm(PickleDumpLoadMixin):
         if aligned:
             assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
             for dset in self.aligned_data:
-                dset[f'smoothed_{key}'] = dset[key].rolling(window, **kwargs).mean()
+                dset[f'{key}_smoothed'] = dset[key].rolling(window, **kwargs).mean()
         else:
-            self.data[f'smoothed_{key}'] = self.data[key].rolling(window, **kwargs).mean()
-            self.units[f'smoothed_{key}'] = self.units[key]
+            self.data[f'{key}_smoothed'] = self.data[key].rolling(window, **kwargs).mean()
+            self.units[f'{key}_smoothed'] = self.units[key]
 
             
             
@@ -572,7 +572,7 @@ class Worm(PickleDumpLoadMixin):
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
         tmp.index = pd.Index(np.arange(-tau_before, tau_after + 1))
-        tmp['time_align'] = tmp.index.values/self.fps
+        tmp['time_aligned'] = tmp.index.values/self.fps
         
 #         rescale_time = kwargs.pop(' rescale_time ', ('Time' in column_align)|('time' in column_align))
         
@@ -868,7 +868,7 @@ class Experiment(PickleDumpLoadMixin):
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
         tmp.columns = [f'{x}_{i}' for i, x in enumerate(tmp.columns, 1)]
-        if metric ==None:
+        if metric == None:
             return tmp
         if metric == "sum":
             return tmp.sum(axis = axis)
@@ -917,7 +917,7 @@ class Experiment(PickleDumpLoadMixin):
         if filterfunction is not None:
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
-        if metric_sample ==None:
+        if metric_sample == None:
             return tmp
         if metric_sample == "sum":
             return tmp.sum(axis = axis)
@@ -994,7 +994,7 @@ class Experiment(PickleDumpLoadMixin):
         if aligned:
             # time is not menaingful, choose a different key
             if key_x == 'time':
-                key_x = 'time_align'
+                key_x = 'time_aligned'
             x = self.get_aligned_sample_metric(key_x, metric_sample_x, metric, filterfunction, axis)
             y = self.get_aligned_sample_metric(key_y, metric_sample_y, metric, filterfunction, axis)
                 
@@ -1060,10 +1060,9 @@ class Experiment(PickleDumpLoadMixin):
             loc = kwargs.pop('loc', 0)
             color = kwargs.pop('color', self.color)
             lbls = kwargs.pop('lbls', self.strain)
-            plot = style.scatterBoxplot(ax,  x_data = [loc], y_data = [y], clrs = [color], lbls=[lbls], **kwargs)
+            plot = style.scatterBoxplot(ax,  x_data = [loc], y_data = [y], clrs = [color], lbls = [lbls], **kwargs)
            
-            
-            
+                    
         else:
              raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
         return plot, x, y
