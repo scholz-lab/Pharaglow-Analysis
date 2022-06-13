@@ -404,7 +404,7 @@ class Worm(PickleDumpLoadMixin):
         """calculate velocity from the coordinates."""
         #TODO allow dt for velocity calculation
         try:
-            velocity= np.sqrt((self.data['x'].diff()**2+self.data['y'].diff()**2))/self.data['frame'].diff()*self.scale*self.fps
+            velocity= np.sqrt((self.data['x'].diff()**2 + self.data['y'].diff()**2))/self.data['frame'].diff()*self.scale*self.fps
             self.data['velocity'] = velocity
             self.units['velocity'] = units
         except KeyError:
@@ -565,13 +565,13 @@ class Worm(PickleDumpLoadMixin):
         if key is None:
             key = self.data.columns
         # create a list of desired elements and then chunk a piece of data around them
-        tstart, tend = timepoint -tau_before, timepoint+tau_after
-        frames = np.arange(tstart, tend+1)
+        tstart, tend = timepoint - tau_before, timepoint + tau_after
+        frames = np.arange(tstart, tend + 1)
         tmp = self.data[self.data[column_align].isin(frames)].loc[:,key]
         # fill missing data
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
-        tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
+        tmp.index = pd.Index(np.arange(-tau_before, tau_after + 1))
         tmp['time_align'] = tmp.index.values/self.fps
         
 #         rescale_time = kwargs.pop(' rescale_time ', ('Time' in column_align)|('time' in column_align))
@@ -854,7 +854,6 @@ class Experiment(PickleDumpLoadMixin):
         return self.samples[N]
 
 
-    def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = False):
         """ Metrics across samples as a function of time (axis=1) or averaged over time a function of samples (axis = 0).
             metric: one of 'sum', 'mean', 'std', 'N', 'sem', 'median', rate', 'collapse', 'max' or 'min'
             filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
