@@ -400,13 +400,22 @@ class Worm(PickleDumpLoadMixin):
             pass
             
         
-    def calculate_velocity(self, units):
+    def calculate_velocity(self, units=None, dt = 1):
         """calculate velocity from the coordinates."""
-        #TODO allow dt for velocity calculation
         try:
-            velocity= np.sqrt((self.data['x'].diff()**2 + self.data['y'].diff()**2))/self.data['frame'].diff()*self.scale*self.fps
+            cms = np.stack([self.data.x, self.data.y]).T
+            v_cms = cms[dt:]-cms[:-dt]
+            t = np.array(self.data.frame)
+            deltat = t[dt:]-t[:-dt]
+            velocity = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat*self.scale*self.fps
+            velocity = np.append(velocity, [np.nan]*dt)
+            #velocity= np.sqrt((self.data['x'].diff()**2+self.data['y'].diff()**2))/self.data['frame'].diff()*self.scale*self.fps
             self.data['velocity'] = velocity
+            
+            if units is None:
+                units = f"{self.units['space_units']}/{self.units['time_units']}"
             self.units['velocity'] = units
+
         except KeyError:
             print('Velocity calculation failed. Continuing.')
         
@@ -415,7 +424,7 @@ class Worm(PickleDumpLoadMixin):
         """using a pump trace, get additional pumping metrics."""
         signal = self.data[key]
         peaks = tools.detect_peaks(signal, adaptive_window, min_distance, min_prominence, sensitivity, use_pyampd)
-        if len(peaks)>0:
+        if len(peaks)>1:
             # add interpolated pumping rate to dataframe
             self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
@@ -543,14 +552,14 @@ class Worm(PickleDumpLoadMixin):
         v_nose_abs = np.sqrt(np.sum((v_nose)**2, axis = 1))/deltat*self.scale#*self.fps
         v_cms_abs = np.sqrt(np.sum((v_cms)**2, axis = 1))/deltat*self.scale#*self.fps
         # add back the missing item from difference
-        v_nose_abs = np.append(v_nose_abs, np.nan)
-        v_cms_abs = np.append(v_cms_abs, np.nan)
+        v_nose_abs = np.append(v_nose_abs, [np.nan]*dt)
+        v_cms_abs = np.append(v_cms_abs, [np.nan]*dt)
         # add to data
         self.add_column('nose_speed', v_nose_abs, overwrite = True)
         self.add_column('cms_speed', v_cms_abs, overwrite = True)
         # add units
-        self.units['nose_speed'] = units['space']/units['time']
-        self.units['cms_speed'] = units['space']/units['time']
+        self.units['nose_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
+        self.units['cms_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
 
         
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'): # , **kwargs)
@@ -698,7 +707,7 @@ class Experiment(PickleDumpLoadMixin):
             file = os.path.join(path,fn)
             if j >= nmax:
                 break
-            if os.path.isfile(file) and filterword in fn and fn.endswith('.json'):
+            if os.path.isfile(file) and fn.startswith(filterword) and fn.endswith('.json'):
                 self.samples.append(Worm(file, columns, self.fps, self.scale, self.units, **kwargs))
                 j += 1
     
@@ -992,7 +1001,7 @@ class Experiment(PickleDumpLoadMixin):
             metric_sample_y = metric_sample[1]
             
         if aligned:
-            # time is not menaingful, choose a different key
+            # time is not meaningful, choose a different key
             if key_x == 'time':
                 key_x = 'time_aligned'
             x = self.get_aligned_sample_metric(key_x, metric_sample_x, metric, filterfunction, axis)
