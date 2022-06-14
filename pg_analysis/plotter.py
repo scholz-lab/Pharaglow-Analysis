@@ -215,8 +215,12 @@ class Worm(PickleDumpLoadMixin):
             return tmp.median()
         if metric == "rate":
             return tmp.sum()/tmp.count()*self.fps
+        if metric == 'max':
+            return tmp.max()
+        if metric == 'min':
+            return tmp.min()
         else:
-            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N'")
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -243,9 +247,12 @@ class Worm(PickleDumpLoadMixin):
             return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
         if metric == 'median':
             return tmp.median(axis = 1)
-
+        if metric == 'max':
+            return tmp.max(axis = 1)
+        if metric == 'min':
+            return tmp.min(axis = 1)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', 'max', 'min' or 'N'")
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -334,16 +341,16 @@ class Worm(PickleDumpLoadMixin):
         """calculate additional properties on the whole dataset, calling functions for each worm."""
 
         funcs = {"reversals": self.calculate_reversals,
-                "count_rate": self.calculate_count_rate,
-                "smoothed": self.calculate_smoothed,
-                "pumps": self.calculate_pumps,
-                "nose_speed": self.calculate_nose_speed,
-                "reversals_nose": self.calculate_reversals_nose,
-                "velocity":self.calculate_velocity,
+                 "count_rate": self.calculate_count_rate,
+                 "smoothed": self.calculate_smoothed,
+                 "pumps": self.calculate_pumps,
+                 "nose_speed": self.calculate_nose_speed,
+                 "reversals_nose": self.calculate_reversals_nose,
+                 "velocity":self.calculate_velocity,
                  "time":self.calculate_time,
-                 'preprocess_signal': self.preprocess_signal,
-                 'locations': self.calculate_locations,
-        }
+                 "preprocess_signal": self.preprocess_signal,
+                 "locations": self.calculate_locations,
+                }
         if name == 'help':
             print(funcs.keys())
             return
@@ -365,10 +372,11 @@ class Worm(PickleDumpLoadMixin):
         if aligned:
             assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
             for dset in self.aligned_data:
-                dset[f'{key}_smooth'] = dset[key].rolling(window, **kwargs).mean()
+                dset[f'{key}_smoothed'] = dset[key].rolling(window, **kwargs).mean()
         else:
-            self.data[f'{key}_smooth'] = self.data[key].rolling(window, **kwargs).mean()
-            self.units[f'{key}_smooth'] = self.units[key]
+            self.data[f'{key}_smoothed'] = self.data[key].rolling(window, **kwargs).mean()
+            self.units[f'{key}_smoothed'] = self.units[key]
+
             
             
     def calculate_time(self):
@@ -429,12 +437,12 @@ class Worm(PickleDumpLoadMixin):
         self.units['pump_events'] = "1"
 
         
-    def calculate_count_rate(self, window, key = 'pump_events',  **kwargs):
-        """Add a column 'count_rate' to self.data. Calculate a pumping rate based on number of counts of pumps in a window. 
+    def calculate_count_rate(self, window, key='pump_events', **kwargs):
+        """Add a column 'count_rate' to self.data. Calculate a rate based on the number of binary events in a window. 
         window is in frame. Result will be in Hz."""
         kwargs['center'] =  kwargs.pop('center', True)
         kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
-        self.data[f'count_rate_{key}'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+        self.data[f'count_rate_{key}'] = self.data[key].rolling(window, **kwargs).sum()/window*self.fps
         self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
@@ -554,7 +562,7 @@ class Worm(PickleDumpLoadMixin):
         self.units['cms_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
 
         
-    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'):
+    def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'): # , **kwargs)
         """align to a timepoint.
          Inputs:
                 timepoint: time to align to in frames
@@ -566,14 +574,21 @@ class Worm(PickleDumpLoadMixin):
         if key is None:
             key = self.data.columns
         # create a list of desired elements and then chunk a piece of data around them
-        tstart, tend = timepoint -tau_before, timepoint+tau_after
-        frames = np.arange(tstart, tend+1)
+        tstart, tend = timepoint - tau_before, timepoint + tau_after
+        frames = np.arange(tstart, tend + 1)
         tmp = self.data[self.data[column_align].isin(frames)].loc[:,key]
         # fill missing data
         tmp = tmp.set_index(column_align)
         tmp = tmp.reindex(pd.Index(frames))
-        tmp.index = pd.Index(np.arange(-tau_before, tau_after+1))
-        tmp['time_align'] = tmp.index.values/self.fps
+        tmp.index = pd.Index(np.arange(-tau_before, tau_after + 1))
+        tmp['time_aligned'] = tmp.index.values/self.fps
+        
+#         rescale_time = kwargs.pop(' rescale_time ', ('Time' in column_align)|('time' in column_align))
+        
+#         if rescale_time:
+#             tmp['time_align'] = tmp.index.values/self.fps
+#         else:
+#             tmp['time_align'] = tmp.index.values
         return tmp
     
 
@@ -848,12 +863,10 @@ class Experiment(PickleDumpLoadMixin):
         return self.samples[N]
 
 
-    def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = False):
         """ Metrics across samples as a function of time (axis=1) or averaged over time a function of samples (axis = 0).
-            metric: one of 'mean', 'std', 'N' or 'sem.'
+            metric: one of 'sum', 'mean', 'std', 'N', 'sem', 'median', rate', 'collapse', 'max' or 'min'
             filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             axis: axis = 1 - returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged/metric of each sample in the data.
-
         """
         tmp = []
         for worm in self.samples:
@@ -864,12 +877,14 @@ class Experiment(PickleDumpLoadMixin):
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
         tmp.columns = [f'{x}_{i}' for i, x in enumerate(tmp.columns, 1)]
-        if metric ==None:
+        if metric == None:
             return tmp
         if metric == "sum":
             return tmp.sum(axis = axis)
         if metric == "mean":
             return tmp.mean(axis = axis)
+        if metric == "mean_%":
+            return tmp.mean(axis=1)*100
         if metric == "std":
             return tmp.std(axis = axis)
         if metric == "N":
@@ -882,8 +897,12 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
         if metric == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns = [key])
+        if metric == 'max':
+            return tmp.max(axis = axis)
+        if metric == 'min':
+            return tmp.min(axis = axis)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean','mean_%', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
 
 
     def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
@@ -907,12 +926,14 @@ class Experiment(PickleDumpLoadMixin):
         if filterfunction is not None:
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
-        if metric_sample ==None:
+        if metric_sample == None:
             return tmp
         if metric_sample == "sum":
             return tmp.sum(axis = axis)
         if metric_sample == "mean":
             return tmp.mean(axis = axis)
+        if metric_sample == "mean_%":
+            return tmp.mean(axis = axis)*100
         if metric_sample == "std":
             return tmp.std(axis = axis)
         if metric_sample == "N":
@@ -923,8 +944,12 @@ class Experiment(PickleDumpLoadMixin):
             return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
         if metric_sample == "collapse":
             return pd.DataFrame(tmp.values.ravel(), columns=[key])
+        if metric_sample == 'max':
+            return tmp.max(axis = axis)
+        if metric_sample == 'min':
+            return tmp.min(axis = axis)
         else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'std', 'sem', 'sum', 'collapse', 'median' or 'N'")
+            raise Exception("Metric not implemented, choose one of 'mean', 'mean_%', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
     
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
@@ -946,7 +971,7 @@ class Experiment(PickleDumpLoadMixin):
     def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  **kwargs):
         """plot the experiment.
             keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
-            metric_sample: is the function applied across the worms in this experiment.
+            metric_sample: is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_sample_x and metric_sample_y (=[''mean','N'])
             metric: is the function applied across time (or stimuli for aligned data)
             filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             aligned: Use self.samples.aligned_data or self.samples.data
@@ -963,12 +988,24 @@ class Experiment(PickleDumpLoadMixin):
             raise ValueError(f'The entry for keys {keys} is not valid.')
         xerr = None
         yerr = None
+        
+        
+        if metric_sample == None:
+            metric_sample_x = None
+            metric_sample_y = None
+        elif isinstance(metric_sample, str):
+            metric_sample_x = metric_sample
+            metric_sample_y = metric_sample
+        else:
+            metric_sample_x = metric_sample[0]
+            metric_sample_y = metric_sample[1]
+            
         if aligned:
             # time is not meaningful, choose a different key
             if key_x == 'time':
-                key_x = 'time_align'
-            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
-            y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
+                key_x = 'time_aligned'
+            x = self.get_aligned_sample_metric(key_x, metric_sample_x, metric, filterfunction, axis)
+            y = self.get_aligned_sample_metric(key_y, metric_sample_y, metric, filterfunction, axis)
                 
             if metric_error is not None:
                 xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction, axis)
@@ -988,8 +1025,8 @@ class Experiment(PickleDumpLoadMixin):
             elif metric == None:
                 # return the metric across each trajectory(Worm) - result will be an average across samples
                 warnings.warn('This option keeps the dataframe index while applying the sample metric which is rarely meaningful. You probably want to align all datasets to their t=0 and rerun with the aligned option.')
-                x = self.get_sample_metric(key_x, metric_sample, filterfunction, axis = 1)
-                y = self.get_sample_metric(key_y, metric_sample, filterfunction, axis = 1)
+                x = self.get_sample_metric(key_x, metric_sample_x, filterfunction, axis = 1)
+                y = self.get_sample_metric(key_y, metric_sample_y, filterfunction, axis = 1)
                 if metric_error is not None:
                     xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis = 1)
                     yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis = 1)
@@ -1023,10 +1060,18 @@ class Experiment(PickleDumpLoadMixin):
             loc = kwargs.pop('loc', 0)
             plot = ax.bar(loc, y, label = self.strain, **kwargs)
 
+        # elif plot_type == 'box':
+        #     loc = kwargs.pop('loc', 0)
+        #     color = kwargs.pop('color', self.color)
+        #     plot = style.scatterBoxplot(ax, [loc], [y], [color], [self.strain], **kwargs)
+            
         elif plot_type == 'box':
             loc = kwargs.pop('loc', 0)
             color = kwargs.pop('color', self.color)
-            plot = style.scatterBoxplot(ax, [loc], [y], [color], [self.strain], **kwargs)
+            lbls = kwargs.pop('lbls', self.strain)
+            plot = style.scatterBoxplot(ax,  x_data = [loc], y_data = [y], clrs = [color], lbls = [lbls], **kwargs)
+           
+                    
         else:
              raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
         return plot, x, y
