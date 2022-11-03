@@ -862,11 +862,12 @@ class Experiment(PickleDumpLoadMixin):
         """
         return self.samples[N]
 
-
-        """ Metrics across samples as a function of time (axis=1) or averaged over time a function of samples (axis = 0).
+    def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = True):
+        """ Metrics across samples as a function of time (axis = 1) or averaged over time a function of samples (axis = 0).
             metric: one of 'sum', 'mean', 'std', 'N', 'sem', 'median', rate', 'collapse', 'max' or 'min'
             filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             axis: axis = 1 - returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged/metric of each sample in the data.
+            ignore_index: TODO
         """
         tmp = []
         for worm in self.samples:
