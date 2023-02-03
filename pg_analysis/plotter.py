@@ -189,7 +189,8 @@ class Worm(PickleDumpLoadMixin):
     #######################################
     def create_ID(self):
         """create a unique ID matching raw data"""
-        self.id = f"{self.experiment}_{self.particle_index}"
+        # self.id = f"{self.experiment}_{self.particle_index}"
+        self.id = self.experiment.split('.')[0]
         
         
     def get_metric(self, key, metric, filterfunction = None):
