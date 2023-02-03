@@ -351,6 +351,7 @@ class Worm(PickleDumpLoadMixin):
                  "time":self.calculate_time,
                  "preprocess_signal": self.preprocess_signal,
                  "locations": self.calculate_locations,
+                 "stimulus": self.calculate_stimulus,
                 }
         if name == 'help':
             print(funcs.keys())
@@ -562,6 +563,56 @@ class Worm(PickleDumpLoadMixin):
         self.units['nose_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
         self.units['cms_speed'] = f"{self.units['space_units']}/{self.units['time_units']}"
 
+        
+    def calculate_stimulus(self, new_key, new_values, timepoints, before, after, aligned=False, debug=False):
+        """Add as a column with a stimulus property and assign values in a given time window for to the existing data.
+        Inputs
+            _ self: pga Worm
+            _ new_key: string. Name of the new column or the column to overwrite
+            (e.g. 'stim_idx', 'Vpp' or 'buzz_duration')
+            _ new_values: a list of float, integer or string. 
+            (e.g. [0, 5, 10, 15, 20]
+            Note that at each timepoint is associated a new_value.Length of timepoints and new_values must match.
+            _ timepoints: list of integers, >=0. Stimulus onsets in frame 
+            (e.g. [5400, 10830, 16260, 21690, 27120])
+            _ before / after: float, >=0. Duration before/after the stimulus onset in s.
+            (e.g. 90s)
+            _ aligned: use worm aligned data. The onset will be 0.
+        """    
+        if debug:
+            print("Warning! calculate_stimulus in debug mode")
+
+        if len(new_values) != len(timepoints):
+            print("Warning ! the number of new_values must match the number of timepoints")
+        else:
+            if aligned:
+                assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
+                for dset in self.aligned_data: # format list into df
+                    dset
+                # Create a new empty column or overwrite with NaN
+                dset[new_key] = np.NaN
+                for i, value in enumerate(new_values):
+                    if debug:
+                        print("aligned", i, timepoints[i], value)
+                    # Define the peristimulus time window
+                    cond_1 = dset['time_aligned'] >= 0 - before # - 10
+                    cond_2 = dset['time_aligned'] <= 0 + after  # + 10
+                    # Add values to the column
+                    dset.loc[cond_1 & cond_2, new_key] = value          
+            else:
+                # Create a new empty column or overwrite with NaN
+                self.data[new_key] = np.NaN
+                for i, value in enumerate(new_values):
+                    if debug:
+                        print(i, timepoints[i], value)
+                    # Define the peristimulus time window
+                    cond_1 = self.data['frame'] >= timepoints[i] - (before * self.fps) # 3000 - 10*30 = 2700
+                    cond_2 = self.data['frame'] <= timepoints[i] + (after * self.fps)  # 3000 + 10*30 = 3300
+                    # Add values to the column
+                    self.data.loc[cond_1 & cond_2, new_key] = value        
+        
+        
+        
         
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'): # , **kwargs)
         """align to a timepoint.
