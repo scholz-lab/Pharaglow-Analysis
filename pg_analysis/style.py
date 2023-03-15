@@ -92,10 +92,10 @@ def cleanAxes(ax, where='all'):
         ax.spines['bottom'].set_visible(False)
         ax.set_yticks([])
         ax.set_xticks([])
-    if where=='x':
+    elif where=='x':
         ax.spines['bottom'].set_visible(False)
         ax.set_xticks([])
-    if where=='y':
+    elif where=='y':
         ax.spines['left'].set_visible(False)
         ax.set_yticks([])
     else:
@@ -137,7 +137,7 @@ def alignAxes(ax1, ax2, where='x'):
 #=============================================================================#
 #                           plot normal plots
 #=============================================================================#
-def plotEthogram(ax, T, etho, alpha = 0.5, yValMax=1, yValMin=0, legend=0):
+def plotEthogram(ax, T, etho, alpha = 0.5, yValMax=1, yValMin=0, legend=0, colDict = None, labelDict=None):
     """make a block graph ethogram for elegans behavior"""
     #colDict = {-1:'red',0:'k',1:'green',2:'blue'}
     #labelDict = {-1:'Reverse',0:'Pause',1:'Forward',2:'Turn'}
@@ -168,9 +168,8 @@ def plotHeatmap(T, Y,  ax, vmin=-2, vmax=2):
     ax.set_ylabel("Neuron")
     return cax1
 
-def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1):
+def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1, lw = 1, vmin = None, vmax = None):
     """multicolor plot modified from francesco."""
-    lw = 1
     x = x[::cg]
     y = y[::cg]
     if threedim:
@@ -179,23 +178,29 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1):
     if threedim:
         points = np.array([x,y,z]).transpose().reshape(-1,1,3)
         segs = np.concatenate([points[:-1],points[1:]],axis=1)
-        lc = Line3DCollection(segs, cmap=c, lw=lw)
+        lc = Line3DCollection(segs, cmap=c, lw=lw,clim=(vmin, vmax))
         if etho:
-            lc = Line3DCollection(segs, cmap=c, lw=lw, norm=ethonorm)
+            lc = Line3DCollection(segs, cmap=c, lw=lw, norm=ethonorm, clim=(vmin, vmax))
         lc.set_array(t)
         ax.add_collection3d(lc)
         ax.set_xlim(np.min(x),np.max(x))
         ax.set_ylim(np.min(y),np.max(y))
+    else:
+        points = np.array([x,y]).transpose().reshape(-1,1,2)
+        segs = np.concatenate([points[:-1],points[1:]],axis=1)
+        lc = LineCollection(segs, cmap=c, lw=lw, clim=(vmin, vmax))
         if etho:
-            lc = LineCollection(segs, cmap=c, lw=lw, norm=ethonorm)
+            lc = LineCollection(segs, cmap=c, lw=lw, norm=ethonorm, clim=(vmin, vmax))
         lc.set_array(t)
         ax.add_collection(lc)
         ax.set_xlim(np.min(x),np.max(x))
         ax.set_ylim(np.min(y),np.max(y))
+        
     return lc
 
 
 def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, outliers = False,**kwargs) : 
+
     """nice boxplots with scatter.
        Example: fig, ax = plt.subplots(1,1)
                 plot = style.scatterBoxplot(ax, x_data = [0,1], y_data = [[0],[10]], clrs=['r','b'], lbls=['A','B'])"""
