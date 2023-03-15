@@ -195,18 +195,21 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1):
     return lc
 
 
-def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, outliers = False, **kwargs) : 
-    """nice boxplots with scatter"""
+def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, outliers = False,**kwargs) : 
+    """nice boxplots with scatter.
+       Example: fig, ax = plt.subplots(1,1)
+                plot = style.scatterBoxplot(ax, x_data = [0,1], y_data = [[0],[10]], clrs=['r','b'], lbls=['A','B'])"""
     
     if dx==None and len(y_data)>1:
         dx = np.min(np.diff(x_data))
     lw = 1.5
+    spread = kwargs.pop('spread', 1)
     for xd, yd, cl in zip(x_data, y_data, clrs) :
         if cl is None:
             cl = 'C0'
         outline_color = kwargs.pop('color', cl)
         bp = ax.boxplot(yd, positions=[xd], widths = 0.2*dx, \
-                        notch=False, patch_artist=True)
+                        notch=False, patch_artist=True, showfliers = outliers)
         for item in ['boxes', 'fliers', 'caps']:
             plt.setp(bp[item], color=cl, alpha = 0.5, **kwargs)
         for item in ['medians', 'whiskers', 'caps']:
@@ -214,7 +217,7 @@ def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False,
         for flier in bp['fliers']:
             flier.set(marker='+', color=cl, alpha=1.0)            
         
-        jitter = (np.random.random(len(yd)) - 0.5)*dx / 20 
+        jitter = (np.random.random(len(yd)) - 0.5)*dx / 5 *spread
         dotxd = [xd - 0.25*dx]*len(yd) + jitter
         if scatter:
             # make alpha stronger
