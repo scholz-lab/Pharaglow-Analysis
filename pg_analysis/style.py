@@ -195,7 +195,7 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1):
     return lc
 
 
-def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, **kwargs) : 
+def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, outliers = False, **kwargs) : 
     """nice boxplots with scatter"""
     
     if dx==None and len(y_data)>1:
