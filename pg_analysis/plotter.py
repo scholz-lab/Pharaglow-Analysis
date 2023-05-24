@@ -167,7 +167,7 @@ class Worm(PickleDumpLoadMixin):
             self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
         if 'Straightened' in columns:
             self.images = np.array([np.array(im) for im in traj['Straightened']])
-        traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
+        traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
        
         self.data = traj
         self.data = self.data.reset_index()
