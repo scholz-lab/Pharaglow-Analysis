@@ -518,6 +518,7 @@ class Worm(PickleDumpLoadMixin):
         rev = angle > angle_threshold
         # filter short reversals
         rev = pd.Series(rev).rolling(2*min_duration, center=True).median()
+        rev = rev>0
         #rev = np.append(rev, [np.nan]*dt)
         self.add_column('reversals_nose', rev, overwrite = True)
         # add reversal events (1 where a reversal starts)
