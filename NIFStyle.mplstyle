@@ -1,0 +1,76 @@
+# Custom stylefile for scholz-lab
+# Always make your intended figures 2x larger than the final print version. 
+# This simplifies labeling etc. A lot. Thus, all font sizes are very large here!
+# Custom colors can be defined here or in the figure document
+# a single column is typically 2.3 in, a full width figure thus 3*2.3 = 6.9 in. 
+
+text.color : (0.0,0.0,0.0)
+
+# AXES
+axes.titlesize : 16
+axes.labelsize : 14
+axes.edgecolor : (0.1,0.1,0.1) #Normalized RGB colours (from 0 to 1 instead of 0 to 255)
+axes.labelcolor : (0.1,0.1,0.1)
+axes.linewidth : 1
+axes.spines.top : False
+axes.spines.right : False
+axes.spines.bottom : True
+axes.spines.left : True
+
+# GRID
+axes.grid : False
+
+# LINES
+axes.prop_cycle : cycler('color', [ '0a2342','a71d31','2d93ad','7ac74f','f75c03','ffcb47']) #hex colours
+lines.linewidth : 1.2
+lines.markeredgewidth : 0.0
+
+# SCATTER PLOT
+scatter.marker : .
+
+# TICKS
+xtick.labelsize : 13
+xtick.color : (0.1,0.1,0.1)
+xtick.direction : in
+ytick.labelsize : 13
+ytick.color : (0.1,0.1,0.1)
+ytick.direction : in
+
+# FIGURE OUTPUT 
+figure.figsize  : 7, 5 # 7, 5
+figure.dpi : 100
+savefig.dpi : 300
+savefig.format    : pdf
+
+## ***************************************************************************
+## * IMAGES                                                                  *
+## ***************************************************************************
+#image.aspect : auto            ## {equal, auto} or a number
+#image.interpolation  : None  ## see help(imshow) for options
+#image.cmap   : viridis          ## A colormap name, gray etc...
+#image.lut    : 256              ## the size of the colormap lookup table
+#image.origin : upper            ## {lower, upper}
+#image.resample  : True
+#image.composite_image : True  ## When True, all the images on a set of axes are
+                               ## combined into a single composite image before
+                               ## saving a figure as a vector graphics file,
+                               ## such as a PDF.
+
+
+## ***************************************************************************
+## * CONTOUR PLOTS                                                           *
+## ***************************************************************************
+#contour.negative_linestyle : dashed  ## string or on-off ink sequence
+#contour.corner_mask        : True    ## {True, False, legacy}
+
+
+## ***************************************************************************
+## * ERRORBAR PLOTS                                                          *
+## ***************************************************************************
+#errorbar.capsize : 4  ## length of end cap on error bars in pixels
+
+
+## ***************************************************************************
+## * HISTOGRAM PLOTS                                                         *
+## ***************************************************************************
+#hist.bins : 30  ## The default number of histogram bins or 'auto'.

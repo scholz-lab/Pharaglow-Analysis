@@ -200,7 +200,7 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1, lw = 1, vmin
 
 
 
-def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, outliers=True, **kwargs) : # EB add outliers=True
+def scatterBoxplot(ax, x_data, y_data, clrs, lbls, scatter = True, rotate=False, dx=0.5, **kwargs) : 
     """nice boxplots with scatter.
        Example: fig, ax = plt.subplots(1,1)
                 plot = style.scatterBoxplot(ax, x_data = [0,1], y_data = [[0],[10]], clrs=['r','b'], lbls=['A','B'])"""
