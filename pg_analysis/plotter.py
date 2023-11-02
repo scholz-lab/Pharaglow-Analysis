@@ -154,6 +154,21 @@ class Worm(PickleDumpLoadMixin):
         if load:
             print('Reading', filename)
             self._load(filename, columns, fps, scale, **kwargs)
+            
+            
+    def _load_CA(self, filename, columns, fps, scale, **kwargs): # ER
+        """load data from my calcium imaging of the pharynx."""
+        with open(filename) as f:
+            tmp = json.load(f)
+        traj = pd.DataFrame(tmp)
+        # drop all columns except the ones we want - but keep the minimal values
+        traj = traj.filter(columns)
+        # extract the centerlines and other non-scalar values into an array instead
+        if 'Centerline' in columns:
+            self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
+        if 'Straightened' in columns:
+            self.images = np.array([np.array(im) for im in traj['Straightened']])
+        traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
          
         
         
@@ -400,10 +415,10 @@ class Worm(PickleDumpLoadMixin):
             pass
             
         
-    def calculate_velocity(self, units=None, dt = 1):
+    def calculate_velocity(self, units=None, dt = 1, columns = ['x', 'y']):
         """calculate velocity from the coordinates."""
         try:
-            cms = np.stack([self.data.x, self.data.y]).T
+            cms = np.stack([self.data[columns[0]], self.data[columns[1]]]).T
             v_cms = cms[dt:]-cms[:-dt]
             t = np.array(self.data.frame)
             deltat = t[dt:]-t[:-dt]
@@ -797,6 +812,10 @@ class Experiment(PickleDumpLoadMixin):
         else:
             raise RuntimeError('info should be a dictionary.')
     
+    def create_IDs(self):
+        """create a unique ID matching raw data for each sample"""
+        for worm in self.samples:
+            worm.create_ID()
     
     def update_units(self):
         """Synchronize units with all worm sample units."""
@@ -873,7 +892,7 @@ class Experiment(PickleDumpLoadMixin):
         for worm in self.samples:
             tmp.append(worm.get_data(key))
         # set index to frame
-        tmp = pd.concat(tmp, axis = 1, ignore_index = ignore_index)
+        tmp = pd.concat(tmp, axis = 1, sort=True)
         if filterfunction is not None:
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
