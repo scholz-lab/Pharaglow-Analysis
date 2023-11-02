@@ -446,7 +446,7 @@ class Worm(PickleDumpLoadMixin):
         self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
-    def calculate_reversals(self, animal_size, angle_threshold):
+    def calculate_reversals(self, animal_size, angle_threshold, scale = None):
         """Adaptation of the Hardaker's method to detect reversal event. 
         A single worm's centroid trajectory is re-sampled with a distance interval equivalent to 1/10 
         of the worm's length (100um) and then reversals are calculated from turning angles.
@@ -455,6 +455,9 @@ class Worm(PickleDumpLoadMixin):
             angle_threshold (degree): what defines a turn 
         Output: None, but adds a column 'reversals' to  self.data.
         """
+        # check if the x,y coordintaes need to be rescaled to um later
+        if scale is None:
+            scale = self.scale
         # resampling
         # Calculate the distance cover by the centroid of the worm between two frames um
         distance = np.cumsum(self.data['velocity'])*self.data['time'].diff()
@@ -468,7 +471,7 @@ class Worm(PickleDumpLoadMixin):
             idx = distance.sub(level).abs().idxmin()
             indices.append(idx)
         # create a downsampled trajectory from these indices
-        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()*self.scale
+        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()*scale
         # we ignore the index here for the shifted data
         traj_Resampled[['x1', 'y1']] = traj_Resampled.shift(1).fillna(0)
         # use the dot product to calculate the andle
