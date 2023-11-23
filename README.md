@@ -32,6 +32,13 @@ In the terminal (Linux)/Anaconda Command Prompt (Windows),
 ```
 python setup.py install --user
 ```
+ - Running python setup.py install --user might be depricated. Alternatively, you can use pip to install Pharaglow-Analysis from github.
+   ```
+   conda activate pumping
+   ```
+   ```
+   python -m pip install git+https://github.com/scholz-lab/Pharaglow-Analysis.git
+   ```
 
 ### Notebooks
 Use the jupyter notebook Using_pganalysis to get a sense of what the package can do.
