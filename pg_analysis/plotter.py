@@ -159,7 +159,7 @@ class Worm(PickleDumpLoadMixin):
         
     def _load(self, filename, columns, fps, scale, **kwargs):
         """load data."""
-        traj = pd.read_json(filename, orient='split')
+        traj = pd.read_json(filename, orient='split', **kwargs)
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
         # extract the centerlines and other non-scalar values into an array instead
@@ -374,15 +374,15 @@ class Worm(PickleDumpLoadMixin):
     def calculate_time(self):
         """calculate time from frame index."""
         # real time
-        self.data['time'] = self.data['frame']/self.fps
+        self.data.loc[:,'time'] = self.data['frame']/self.fps
         self.units['time'] = self.units['time_units']
     
     
     def calculate_locations(self):
         """calculate correctly scaled x,y coordinates."""
         # real time
-        self.data['x_scaled'] = self.data['x']*self.scale
-        self.data['y_scaled'] = self.data['y']*self.scale
+        self.data.loc[:,'x_scaled'] = self.data['x']*self.scale
+        self.data.loc[:,'y_scaled'] = self.data['y']*self.scale
         self.units['x_scaled'] = self.units['space_units']
         self.units['y_scaled'] = self.units['space_units']
         try:
@@ -418,13 +418,13 @@ class Worm(PickleDumpLoadMixin):
         peaks = tools.detect_peaks(signal, adaptive_window, min_distance, min_prominence, sensitivity, use_pyampd)
         if len(peaks)>1:
             # add interpolated pumping rate to dataframe
-            self.data['rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
+            self.data.loc[:,'rate'] = np.interp(np.arange(len(self.data)), peaks[:-1], self.fps/np.diff(peaks))
             # # get a binary trace where pumps are 1 and non-pumps are 0
-            self.data['pump_events'] = 0
+            self.data.loc[:,'pump_events'] = 0
             self.data.loc[peaks,['pump_events']] = 1
         else:
-            self.data['rate'] = 0
-            self.data['pump_events'] = 0
+            self.data.loc[:,'rate'] = 0
+            self.data.loc[:,'pump_events'] = 0
         self.units['rate'] = f"1/{self.units['time']}"
         self.units['pump_events'] = "1"
 
@@ -434,7 +434,7 @@ class Worm(PickleDumpLoadMixin):
         window is in frame. Result will be in Hz."""
         kwargs['center'] =  kwargs.pop('center', True)
         kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
-        self.data[f'count_rate_{key}'] = self.data['pump_events'].rolling(window, **kwargs).sum()/window*self.fps
+        self.data[f'count_rate_{key}'] = self.data[key].rolling(window, **kwargs).sum()/window*self.fps
         self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
@@ -468,9 +468,10 @@ class Worm(PickleDumpLoadMixin):
             v1 = [row.x, row.y]
             v2 = [row.x1, row.y1]
             return np.degrees(np.arccos(np.dot(v1, v2)/np.linalg.norm(v1)/np.linalg.norm(v2)))
-        traj_Resampled['angle'] = traj_Resampled.apply(lambda row: angle(row), axis =1)
+        traj_Resampled['angle'] = 0
+        traj_Resampled['angle']= traj_Resampled.apply(lambda row: angle(row), axis =1)
         rev = traj_Resampled.index[traj_Resampled.angle>=angle_threshold]
-        self.data['reversals'] = 0
+        self.data.loc[:,'reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
         # units
         self.units['reversals'] = '1'
@@ -692,7 +693,7 @@ class Experiment(PickleDumpLoadMixin):
             file = os.path.join(path,fn)
             if j >= nmax:
                 break
-            if os.path.isfile(file) and fn.startswith(filterword) and fn.endswith('.json'):
+            if os.path.isfile(file) and filterword in fn and fn.endswith('.json'):
                 self.samples.append(Worm(file, columns, self.fps, self.scale, self.units, **kwargs))
                 j += 1
     
@@ -943,7 +944,7 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
 
-    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  **kwargs):
+    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  apply_to_x = True, **kwargs):
         """plot the experiment.
             keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
             metric_sample: is the function applied across the worms in this experiment.
@@ -953,6 +954,7 @@ class Experiment(PickleDumpLoadMixin):
             ax: either matplotlib axis object or list of axes
             metric: if true, plot the sample metric of each key
             axis: only used if aligned = True: axis = 1 metric across columns -> result is a timeseries axis = 0 metric across rows -> results is one for each sample/worm or stimulus.
+            apply_to_x: apply the same metric to the x-axis/first key. Set to False if you want to plot e.g., a timeseries
         """
         if isinstance(keys, list) or isinstance(keys, tuple):
             key_x, key_y = keys[:2]
@@ -967,8 +969,17 @@ class Experiment(PickleDumpLoadMixin):
             # time is not meaningful, choose a different key
             if key_x == 'time':
                 key_x = 'time_align'
-            x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
+            if apply_to_x:
+                x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
+            else:
+                if metric_sample is not None:
+                    x = self.get_aligned_sample_metric(key_x, 'mean', None, filterfunction, axis)
+                elif metric is not None:
+                    x = self.get_aligned_sample_metric(key_x, None, 'mean', filterfunction, axis)
+                
+            
             y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
+            
                 
             if metric_error is not None:
                 xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction, axis)

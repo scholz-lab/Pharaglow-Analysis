@@ -168,7 +168,7 @@ def plotHeatmap(T, Y,  ax, vmin=-2, vmax=2):
     ax.set_ylabel("Neuron")
     return cax1
 
-def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1, lw = 1, vmin = None, vmax = None):
+def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1, lw = 1, vmin = None, vmax = None, **kwargs):
     """multicolor plot modified from francesco."""
     x = x[::cg]
     y = y[::cg]
@@ -178,9 +178,9 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1, lw = 1, vmin
     if threedim:
         points = np.array([x,y,z]).transpose().reshape(-1,1,3)
         segs = np.concatenate([points[:-1],points[1:]],axis=1)
-        lc = Line3DCollection(segs, cmap=c, lw=lw,clim=(vmin, vmax))
+        lc = Line3DCollection(segs, cmap=c, lw=lw,clim=(vmin, vmax), **kwargs)
         if etho:
-            lc = Line3DCollection(segs, cmap=c, lw=lw, norm=ethonorm, clim=(vmin, vmax))
+            lc = Line3DCollection(segs, cmap=c, lw=lw, norm=ethonorm, clim=(vmin, vmax), **kwargs)
         lc.set_array(t)
         ax.add_collection3d(lc)
         ax.set_xlim(np.min(x),np.max(x))
@@ -188,9 +188,9 @@ def multicolor(ax,x,y,z,t,c, threedim = True, etho = False, cg = 1, lw = 1, vmin
     else:
         points = np.array([x,y]).transpose().reshape(-1,1,2)
         segs = np.concatenate([points[:-1],points[1:]],axis=1)
-        lc = LineCollection(segs, cmap=c, lw=lw, clim=(vmin, vmax))
+        lc = LineCollection(segs, cmap=c, lw=lw, clim=(vmin, vmax), **kwargs)
         if etho:
-            lc = LineCollection(segs, cmap=c, lw=lw, norm=ethonorm, clim=(vmin, vmax))
+            lc = LineCollection(segs, cmap=c, lw=lw, norm=ethonorm, clim=(vmin, vmax), **kwargs)
         lc.set_array(t)
         ax.add_collection(lc)
         ax.set_xlim(np.min(x),np.max(x))
