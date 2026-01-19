@@ -16,6 +16,53 @@ from . import tools
 from .tools import PickleDumpLoadMixin
 
 
+# Default units definition for PharaGlow data columns
+UNITS = {
+    'x': 'px',
+    'y': 'px',
+    'x_scaled': 'um',
+    'y_scaled': 'um',
+    'frame': '1',
+    'time': 's',
+    'time_align': 's',
+    'time_aligned': 's',
+    'pumps': 'a.f.u.',
+    'pumps_clean': 'a.f.u.',
+    'pump_events': '1',
+    'rate': '1/s',
+    'count_rate': '1/s',
+    'count_rate_pump_events': '1/s',
+    'velocity': 'um/s',
+    'velocity_smooth': 'um/s',
+    'nose_speed': 'um/s',
+    'cms_speed': 'um/s',
+    'reversals': '1',
+    'reversals_nose': '1',
+    'inside': '1',
+    'Imean': 'a.f.u.',
+    'Imax': 'a.f.u.',
+    'Istd': 'a.f.u.',
+    'skew': '1',
+    'area': 'px^2',
+    'Area2': 'px^2',
+    'size': 'mm',
+    'Centerline': '1',
+    'centerline_scaled': 'um',
+    'Straightened': '1',
+    'temperature': 'C',
+    'humidity': '%',
+    'age': 'h',
+    '@acclimation': 'min',
+    'particle': '1',
+    'image_index': '1',
+    'im_idx': '1',
+    'has_image': '1',
+    'index': '1',
+    'space_units': 'um',
+    'time_units': 's',
+}
+
+
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
     if isinstance(ax, list):
@@ -700,7 +747,10 @@ class Experiment(PickleDumpLoadMixin):
         if columns is None:
              columns = ['x', 'y', 'frame', 'pumps']
         # unit definitions
-        if isinstance(units, str) or isinstance(units, Path):
+        if units is None:
+            # Use the default UNITS dictionary
+            self.units = UNITS.copy()
+        elif isinstance(units, str) or isinstance(units, Path):
             with open(units) as stream:
                 try:
                     self.units = yaml.safe_load(stream)
@@ -709,7 +759,7 @@ class Experiment(PickleDumpLoadMixin):
         elif isinstance(units, dict):
             self.units = units
         else:
-            raise RuntimeError('Specify units or config file containing units!')
+            raise RuntimeError('units must be None, a dict, or a path to a YAML config file!')
         # check if we have units for all columns
         if not set(columns)<=set(self.units):
             raise IndexError(f"Units are not specified for all columns {set(self.units)}.")
