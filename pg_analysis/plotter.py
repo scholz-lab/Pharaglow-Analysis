@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
 from scipy.stats import circmean, circstd
+from numpy.lib.stride_tricks import sliding_window_view
 from pathlib import Path
 
 from . import style
@@ -62,6 +63,39 @@ UNITS = {
     'time_units': 's',
 }
 
+def fast_window(x, w, min_periods_one=True, anchor='back'):
+    """
+    Returns a sliding window view similar as pandas rolling, but based on numpy sliding_window_view
+    Args:
+        x (numpy.ndarray): input data, must be 1 dimensional
+        w (int): width of sliding window 
+        min_periods_one (bool): minimum number of observations in window required to have a value is one
+        anchor (str): Where to anchor the sliding window
+    Returns:
+        v (np.ndarray): arry containing sliding window in rows
+    """
+    v = sliding_window_view(x, w)
+    if not min_periods_one:
+        return v
+
+    min_s = np.ones((w,w))*x[:w]
+    min_s[np.triu_indices(min_s.shape[0],1)] = np.nan
+    min_e = np.ones((w,w))*x[-w:]
+    min_e[np.tril_indices(min_e.shape[0],-1)] = np.nan
+    
+    if anchor not in ['back','front','center']:
+        raise ValueError(f"anchor must be one of ['back','front','center'], but is '{anchor}'")
+    if anchor=='back':
+        min_s = min_s[:-1]
+        v=np.vstack([min_s,v])
+    if anchor=='front':
+        min_e = min_e[1:]
+        v=np.vstack([v,min_e])
+    elif anchor=='center':
+        min_s = min_s[w//2:-1]
+        min_e = min_e[1:(w//2)+1]
+        v=np.vstack([min_s,v,min_e])
+    return v
 
 def _lineplot(x ,y, yerr, ax, **kwargs):
     plot = []
@@ -522,35 +556,40 @@ class Worm(PickleDumpLoadMixin):
             scale = self.scale
         # resampling
         # Calculate the distance cover by the centroid of the worm between two frames um
-        distance = np.cumsum(self.data['velocity'])*self.data['time'].diff()
+        cummul_distance = np.cumsum(self.data['velocity'])*self.data['time'].diff()
+        # create an array of distances that are animal_size appart for sampling,
         # find the maximum number of worm lengths we have travelled
-        maxlen = distance.max()/animal_size
-        # make list of levels that are multiples of animal size
-        levels = np.arange(animal_size, maxlen*animal_size, animal_size)
-        # Find the indices where the distance is equal or the closest to the pixel interval by repeatedly subtracting the levels
-        indices = []
-        for level in levels:
-            idx = distance.sub(level).abs().idxmin()
-            indices.append(idx)
+        maxlen = cummul_distance.max()/animal_size
+        sample_distance = np.arange(animal_size, maxlen*animal_size, animal_size)
+        # for each sample distance select the closest value from cummulative distance
+        sample_indices = pd.DataFrame(abs(cummul_distance.values - sample_distance[:, np.newaxis])).T
+        sample_indices = sample_indices.idxmin(axis=0).values
+
         # create a downsampled trajectory from these indices
-        traj_Resampled = self.data.loc[indices, ['x', 'y']].diff()*scale
+        traj_Resampled = self.data.loc[sample_indices, ['x', 'y']].diff()*scale
         # we ignore the index here for the shifted data
         traj_Resampled[['x1', 'y1']] = traj_Resampled.shift(1).fillna(0)
+
         # use the dot product to calculate the andle
         def angle(row):
+            old_err = np.seterr(divide='ignore', invalid='ignore')
             v1 = [row.x, row.y]
             v2 = [row.x1, row.y1]
-            return np.degrees(np.arccos(np.dot(v1, v2)/np.linalg.norm(v1)/np.linalg.norm(v2)))
+            deg = np.degrees(np.arccos(np.dot(v1, v2)/np.linalg.norm(v1)/np.linalg.norm(v2)))
+            np.seterr(**old_err)
+            return deg
         traj_Resampled['angle'] = 0
-        traj_Resampled['angle']= traj_Resampled.apply(lambda row: angle(row), axis =1)
+        traj_Resampled['angle']= traj_Resampled.apply(lambda row: angle(row), axis=1)
+        
         rev = traj_Resampled.index[traj_Resampled.angle>=angle_threshold]
+        #self.data.loc[:,'angle'] = traj_Resampled['angle']
         self.data.loc[:,'reversals'] = 0
         self.data.loc[rev,'reversals'] = 1
         # units
         self.units['reversals'] = '1'
      
 
-    def calculate_reversals_nose(self, dt =1, angle_threshold = 150, w_smooth = 30, min_duration = 30):
+    def calculate_reversals_nose(self, dt = 1, angle_threshold = 150, w_smooth = 30, min_duration = 30):
         """using the motion of the nosetip relative to the center of mass motion to determine reversals."""
         
         try:
@@ -566,17 +605,29 @@ class Worm(PickleDumpLoadMixin):
         # subtract the mean since the cl is at (50,50) or similar
         yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
         cl_new = np.stack([xc, yc]).T + np.repeat(cms[:,np.newaxis,:], nPts, axis = 1)
-        nose = cl_new[:,0,:]
-        #calculate directions - in the lab frame! and with dt
-        v_nose = nose[dt:]-nose[:-dt]
-        #v_cms = cms[dt:]-cms[:-dt]
-        # tangent of the worm = 'heading'
-        heading = cl_new[:,0,]-cl_new[:,nPts//2,]
+
+        old_err = np.seterr(divide='ignore', invalid='ignore')
+        # extract direction of worm/pharynx over space
+        #nose_vec = cl_new[:,-1]-cl_new[:,0]
+        nose_vec = cl_new[dt:,0]-cl_new[:-dt,0]
+        nose_vlen = np.linalg.norm(nose_vec, axis=1)[:,np.newaxis]
+        nose_unit = np.divide(nose_vec,nose_vlen)
+        nose_unit = np.nan_to_num(nose_unit)
+        # extract direction of cms over time using dt
+        #cms_vec = np.diff(cms, axis=0, n=dt)
+        cms_vec = cl_new[:,0]-cl_new[:,nPts//2]
+        cms_vlen = np.linalg.norm(cms_vec, axis=1)[:,np.newaxis]
+        cms_unit = np.divide(cms_vec,cms_vlen)
+        cms_unit = np.nan_to_num(cms_unit)
+        np.seterr(**old_err)
         
         # angle relative to cms motion
-        angle = np.array([np.arccos(np.dot(v1, v2)/(np.linalg.norm(v2)*np.linalg.norm(v1)))*180/np.pi for \
-                          (v1, v2) in zip(v_nose, heading)])
-        angle = pd.Series(angle).rolling(w_smooth, min_periods=1, center=True).apply(circmean, args=(180, 0))
+        crop = min(len(nose_unit), len(cms_unit))
+        dotProduct = nose_unit[:crop,0]*cms_unit[:crop,0] +nose_unit[:crop,1]*cms_unit[:crop,1]
+        angle = np.rad2deg(np.arccos(dotProduct))
+
+        # smooth angle
+        angle = circmean(fast_window(angle, w_smooth, anchor='center'), 180, 0, axis=1, nan_policy='omit')
         angle[np.isnan(angle)] = 0
         angle = np.append(angle, [np.nan]*dt)
         self.add_column('angle_nose', angle, overwrite = True)
