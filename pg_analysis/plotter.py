@@ -606,27 +606,25 @@ class Worm(PickleDumpLoadMixin):
         yc, xc = cl.T - np.mean(cl.T, axis = 1)[:,np.newaxis]
         cl_new = np.stack([xc, yc]).T + np.repeat(cms[:,np.newaxis,:], nPts, axis = 1)
 
-        old_err = np.seterr(divide='ignore', invalid='ignore')
+        old_err = np.seterr(divide='ignore', invalid='ignore') # ignore invalid and divide errors during angle calcuation
         # extract direction of worm/pharynx over space
-        #nose_vec = cl_new[:,-1]-cl_new[:,0]
-        nose_vec = cl_new[dt:,0]-cl_new[:-dt,0]
+        nose_vec = cl_new[dt:,0]-cl_new[:-dt,0] # movement of the nose
         nose_vlen = np.linalg.norm(nose_vec, axis=1)[:,np.newaxis]
         nose_unit = np.divide(nose_vec,nose_vlen)
         nose_unit = np.nan_to_num(nose_unit)
         # extract direction of cms over time using dt
-        #cms_vec = np.diff(cms, axis=0, n=dt)
-        cms_vec = cl_new[:,0]-cl_new[:,nPts//2]
-        cms_vlen = np.linalg.norm(cms_vec, axis=1)[:,np.newaxis]
-        cms_unit = np.divide(cms_vec,cms_vlen)
-        cms_unit = np.nan_to_num(cms_unit)
+        heading_vec = cl_new[:,0]-cl_new[:,nPts//2] # tangent of the worm = 'heading'
+        heading_vlen = np.linalg.norm(heading_vec, axis=1)[:,np.newaxis]
+        heading_unit = np.divide(heading_vec,heading_vlen)
+        heading_unit = np.nan_to_num(heading_unit)
         np.seterr(**old_err)
         
         # angle relative to cms motion
-        crop = min(len(nose_unit), len(cms_unit))
-        dotProduct = nose_unit[:crop,0]*cms_unit[:crop,0] +nose_unit[:crop,1]*cms_unit[:crop,1]
+        crop = min(len(nose_unit), len(heading_unit))
+        dotProduct = nose_unit[:crop,0]*heading_unit[:crop,0] +nose_unit[:crop,1]*heading_unit[:crop,1]
         angle = np.rad2deg(np.arccos(dotProduct))
 
-        # smooth angle
+        # smooth angle with fast_window to increase speed
         angle = circmean(fast_window(angle, w_smooth, anchor='center'), 180, 0, axis=1, nan_policy='omit')
         angle[np.isnan(angle)] = 0
         angle = np.append(angle, [np.nan]*dt)
