@@ -63,6 +63,9 @@ UNITS = {
     'time_units': 's',
 }
 
+# Minimal required columns for basic tracking
+MINIMAL_COLUMNS = {'frame', 'x', 'y'}
+
 def fast_window(x, w, min_periods_one=True, anchor='back'):
     """
     Returns a sliding window view similar as pandas rolling, but based on numpy sliding_window_view
@@ -983,12 +986,37 @@ class Experiment(PickleDumpLoadMixin):
         Returns:
             None
         """
+        # Track if columns were explicitly provided by user
+        user_specified_columns = columns is not None
+        #If user calls load_data(path) → user_specified_columns = False
+        #If user calls load_data(path, columns=['frame', 'x', 'y']) → user_specified_columns = True
+        
         if columns is None:
              columns = ['x', 'y', 'frame', 'pumps']
+        
+        # Check for minimal columns usage
+        columns_set = set(columns)
+        if columns_set == MINIMAL_COLUMNS or columns_set <= MINIMAL_COLUMNS:
+            warnings.warn(
+                f"Using minimal column set {sorted(columns_set)}. "
+                "Consider adding additional columns for full analysis capabilities.",
+                UserWarning
+            )            
+            #columns_set == MINIMAL_COLUMNS → exact match: {'frame', 'x', 'y'}
+            #columns_set <= MINIMAL_COLUMNS → subset: e.g., {'frame', 'x'} or {'x', 'y'}
+            
         # unit definitions
         if units is None:
             # Use the default UNITS dictionary
             self.units = UNITS.copy()
+            # Warn if user specified columns but not units
+            if user_specified_columns:
+                warnings.warn(
+                    "Columns were specified without explicit units. "
+                    "Using default units from UNITS dictionary. "
+                    "To suppress this warning, provide units as a dict or YAML file path.",
+                    UserWarning
+                )
         elif isinstance(units, str) or isinstance(units, Path):
             with open(units) as stream:
                 try:
