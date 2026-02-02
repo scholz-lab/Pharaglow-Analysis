@@ -983,12 +983,32 @@ class Experiment(PickleDumpLoadMixin):
         Returns:
             None
         """
+        # Track if columns were explicitly provided 
+        user_specified_columns = columns is not None
+        
         if columns is None:
-             columns = ['x', 'y', 'frame', 'pumps']
+             columns = ['x', 'y', 'frame'] 
+        
+        # Warn if using only minimal columns 
+        if set(columns) <= {'x', 'y', 'frame'}:
+            warnings.warn(
+                f"Using minimal column set {sorted(columns)}. "
+                "Consider adding additional columns for full analysis.",
+                UserWarning
+            )
+            
         # unit definitions
         if units is None:
             # Use the default UNITS dictionary
             self.units = UNITS.copy()
+            # Warn if user specified columns but not units
+            if user_specified_columns:
+                warnings.warn(
+                    "Columns were specified without explicit units. "
+                    "Using default units from UNITS dictionary. "
+                    "To suppress this warning, provide units as a dict or YAML file path.",
+                    UserWarning
+                )
         elif isinstance(units, str) or isinstance(units, Path):
             with open(units) as stream:
                 try:
@@ -1019,6 +1039,7 @@ class Experiment(PickleDumpLoadMixin):
             if os.path.isfile(file) and filterword in fn and fn.endswith('.json'):
                 self.samples.append(Worm(file, columns, self.fps, self.scale, self.units, **kwargs))
                 j += 1
+    
     
     
     def save_wcon(self, filepath, columns = None, tag = '@INF'):
