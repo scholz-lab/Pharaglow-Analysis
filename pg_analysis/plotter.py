@@ -536,20 +536,23 @@ class Worm(PickleDumpLoadMixin):
             None
         """
 
-        funcs = {"reversals": self.calculate_reversals,
+        funcs = {"velocity":self.calculate_velocity,
+                 "time":self.calculate_time,
+                 "preprocess_signal": self.preprocess_signal,
+                 "locations": self.calculate_locations,
+                "reversals": self.calculate_reversals,
                  "count_rate": self.calculate_count_rate,
                  "smoothed": self.calculate_smoothed,
                  "pumps": self.calculate_pumps,
                  "nose_speed": self.calculate_nose_speed,
                  "reversals_nose": self.calculate_reversals_nose,
-                 "velocity":self.calculate_velocity,
-                 "time":self.calculate_time,
-                 "preprocess_signal": self.preprocess_signal,
-                 "locations": self.calculate_locations,
+                 
                 }
         if name == 'help':
             print(funcs.keys())
             return
+        if isinstance(name, int):
+            name = list(funcs.keys())[name] 
         # run function
         funcs[name](**kwargs)
         # update columns
@@ -673,7 +676,7 @@ class Worm(PickleDumpLoadMixin):
         self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
-    def calculate_reversals(self, animal_size, angle_threshold, scale = None):
+    def calculate_reversals(self, animal_size=100, angle_threshold=150, scale = None):
         """
         Adaptation of the Hardaker's method to detect reversal event. 
         A single worm's centroid trajectory is re-sampled with a distance interval equivalent to 1/10 
