@@ -63,6 +63,8 @@ UNITS = {
     'time_units': 's',
 }
 
+
+
 def fast_window(x, w, min_periods_one=True, anchor='back'):
     """
     Returns a sliding window view similar as pandas rolling, but based on numpy sliding_window_view
@@ -98,17 +100,6 @@ def fast_window(x, w, min_periods_one=True, anchor='back'):
     return v
 
 def _lineplot(x ,y, yerr, ax, **kwargs):
-    #TODO: swap yerr and ax order and set yerr=None to not having to set yerr to None explicitly
-    """
-    Plots line plot from x and y, with a error.
-
-    Args:
-        x (list, pandas.DataFrame pandas.Series): values over x
-        y (list, pandas.DataFrame pandas.Series): values over y
-        yerr (None, pandas.DataFrame pandas.Series): values for y error over x
-    Returns:
-        list of Line2D: A list of lines representing the plotted data.
-    """
     plot = []
     if isinstance(ax, list):
         x = pd.DataFrame(x)
@@ -226,21 +217,9 @@ def _heatmap(x, y, ax, **kwargs):
 
 
 class Worm(PickleDumpLoadMixin):
-    """class to contain data from a single timeseries result."""
+    """class to contain data from a single pharaglow result."""
     def __init__(self, filename, columns, fps, scale, units, particle_index = None, load = True, **kwargs):
-        """
-        Initialize object and load a timeseries file.
-        Args:
-            filename (): path to file
-            columns (list): list of columns to load
-            fps (int): framerate of timeseries
-            scale (float): scale of recording
-            units (): units of columns.
-            particle_index (int, None): index to assign to timeseries, if None reads index from filename, default is None.
-            load (bool): Whether to load timeseries, default is True.
-        Returns:
-            None
-        """
+        """initialize object and load a pharaglow results file."""
         self.fps = fps
         self.scale = scale
         self.flag = False
@@ -261,17 +240,7 @@ class Worm(PickleDumpLoadMixin):
             
             
     def _load_CA(self, filename, columns, fps, scale, **kwargs): # ER
-        #TODO: rewrite to load Macroscope Data
-        """
-        Load data from my calcium imaging of the pharynx.
-        Args:
-            filename (): path to json file
-            columns (list): columns to load from file
-            fps (int): framerate of timeseries.
-            scale (float): scale of recording
-        Returns:
-            None
-        """
+        """load data from my calcium imaging of the pharynx."""
         with open(filename) as f:
             tmp = json.load(f)
         traj = pd.DataFrame(tmp)
@@ -287,15 +256,7 @@ class Worm(PickleDumpLoadMixin):
         
         
     def _load(self, filename, columns, fps, scale, **kwargs):
-        """load data.
-        Args:
-            filename (): path to file
-            columns (list): list of columns to load
-            fps (int): framerate of timeseries
-            scale (float): scale of recording
-        Returns:
-            None
-        """
+        """load data."""
         traj = pd.read_json(filename, orient='split', **kwargs)
         # drop all columns except the ones we want - but keep the minimal values
         traj = traj.filter(columns)
@@ -324,20 +285,13 @@ class Worm(PickleDumpLoadMixin):
     #
     #######################################
     def create_ID(self):
-        """Create a unique ID matching raw data."""
+        """create a unique ID matching raw data"""
         self.id = f"{self.experiment}_{self.particle_index}"
         
         
     def get_metric(self, key, metric, filterfunction = None):
-        """
-        Return metrics of a data column given by key.
-        Args:
-            key (str): column to get metric from
-            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N']
-            filterfunction (callable): a callable that returns a boolean for each entry in the series data[key]. 
-                For example a function that filters for values over 5, i.e. returns True for values below 5. Default is None.
-        Returns:
-            Scalar: metric of requested key
+        """return metrics of a data column given by key.
+            filterfunction: a callable that returns a boolean for each entry in the series data[key] 
         """
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
         tmp = self.data.set_index('frame')[key]
@@ -368,16 +322,10 @@ class Worm(PickleDumpLoadMixin):
     
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
-        """
-        Get averages across timepoints for a single worm. eg. average across multiple stimuli. 
-        Requires multi_align(self) to be run first.
-        Args:
-            key (str): column to get metric from
-            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N']
-            filterfunction (callable): a callable that returns a boolean for each entry in the series data[key]. 
-                For example a function that filters for values over 5, i.e. returns True for values below 5. Default is None.
-        Returns:
-            Scalar: metric of requested key
+        """get averages across timepoints for a single worm. eg. average across multiple stimuli. 
+        Requires multi_align(self) to be run.
+
+        filterfunction: a callable that returns a boolean for each entry in the series aligned_data[key] 
         """
         assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
         assert key in self.aligned_data[0].columns, f'The key {key} does not exist in the data.'
@@ -406,14 +354,10 @@ class Worm(PickleDumpLoadMixin):
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
-        """
-        Return a column of data with name 'key' or the whole pandas dataframe.
-        Args:
-            key (str, None): a column of self.data. When key is None returns all columns. Default is None.
-            aligned (bool): Toggle using aligned or full data
-            index_column (str): Column to set as index, default is 'frame'. The returned dataframe or series will have that column as index. Important for concatenation.
-        Returns:
-            DataFrame or Series: requested partition of self.data
+        """return a column of data with name 'key' or the whole pandas dataframe.
+        key: a column of self.data
+        aligned: Toggle using aligned or full data
+        index_column: The returned dataframe or series will have that column as index. Important for concatenation.
         """
         if aligned:
             self.get_data_aligned(key)
@@ -430,13 +374,7 @@ class Worm(PickleDumpLoadMixin):
 
 
     def get_data_aligned(self, key = None):
-        """
-        Return a column of aligned data or the whole aligned pandas dataframe at a specific timepoints.
-        Args:
-            key (str, None): a column of self.aligned_data. When key is None returns all columns. Default is None.
-        Returns:
-            DataFrame or Series: requested partition of self.aligned_data
-        """
+        """return a column of aligned data or the whole aligned pandas dataframe at a specific timepoints."""
         assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
         if key == None:
             return self.aligned_data
@@ -446,14 +384,8 @@ class Worm(PickleDumpLoadMixin):
 
 
     def get_events(self, events = 'pump_events', unit = 'index', aligned = False):
-        """
-        Return peak locations for this worm i.e., where a binary column is 1 or True.
-        Args:
-            events (str): column to get events from, must contain events encoded in binary format, with 1 or True signifying an event occuring.
-            unit (str): column of data at which to evaluate e.g. 'time'. Default is 'index'
-            aligned (bool): Toggle using aligned or full data
-        Returns:
-            DataFrame: partition of data with events
+        """return peak locations for this worm i.e., where a binary column is 1 or True.
+        unit: column of data at which to evaluate e.g. 'time'
         """
         if aligned:
             assert len(self.aligned_data)>0, 'Please run Worm.align() or Worm.multi_align() first!'
@@ -472,15 +404,12 @@ class Worm(PickleDumpLoadMixin):
 
 
     def add_column(self, key, values, overwrite = True):
+        """add a data column to the underlying datset. Will overwrite existing column names if overwrite.
+            key: name of new (or existing) column
+            values: list with the same length or series with matching index, or dict with ma
+            overwrite: replaces column if it exists.
         """
-        Add a data column to the underlying datset. Will overwrite existing column names if overwrite.
-        Args:
-            key (str): name of new (or existing) column. If overwrite is True, existing columns are overwritten.
-            values (Sequence): list with the same length or series with matching index as index of self.data
-            overwrite (bool): replaces column if it exists, default is True
-        Returns:
-            None
-        """
+
         if key in self.data.columns and not overwrite:
             warnings.warn(f'Column {key} exists. If you want to overwrite the existing data, use overwrite = True.')
         else:
@@ -495,17 +424,7 @@ class Worm(PickleDumpLoadMixin):
     #
     #######################################
     def preprocess_signal(self, key, w_outlier, w_bg, w_smooth, **kwargs):
-        #TODO: reorder to set w_outlier last and set to None
-        """
-        Use outlier removal, background subtraction and filtering to clean a signal. Is setting a new column with suffix '_clean'.
-        Args:
-            key (str): column to preprocess
-            w_outlier (int): size of window for outlier detection, sigma can be set through kwargs, default for sigma is 3.
-            w_bg (int): size of window for background subtraction
-            w_smooth (int): size of window for rolling mean
-        Returns:
-            None
-        """
+        "Use outlier removal, background subtraction and filtering to clean a signal."
         # remove outliers
         sigma = kwargs.pop('sigma', 3)
         # make a copy of the signal
@@ -517,24 +436,7 @@ class Worm(PickleDumpLoadMixin):
 
         
     def calculate_property(self, name, **kwargs):
-        """
-        Calculate additional properties on the whole dataset.
-        Args:
-            name (str): name of property, if 'help' a list of all options is printed. 
-                Options are:
-                    - 'reversals': :func:self.calculate_reversals,
-                    - 'count_rate': :func:self.calculate_count_rate,
-                    - 'smoothed': :func:self.calculate_smoothed,
-                    - 'pumps': :func:self.calculate_pumps,
-                    - 'nose_speed': :func:self.calculate_nose_speed,
-                    - 'reversals_nose': :func:self.calculate_reversals_nose,
-                    - 'velocity': :func:self.calculate_velocity,
-                    - 'time': :func:self.calculate_time,
-                    - 'preprocess_signal': :func:self.preprocess_signal,
-                    - 'locations': :func:self.calculate_locations,
-        Returns:
-            None
-        """
+        """calculate additional properties on the whole dataset, calling functions for each worm."""
 
         funcs = {"reversals": self.calculate_reversals,
                  "count_rate": self.calculate_count_rate,
@@ -558,13 +460,9 @@ class Worm(PickleDumpLoadMixin):
 
     def calculate_smoothed(self, key, window, aligned = False, **kwargs):
         """use rolling apply to smooth a series with the given parameters which is added as a column to the existing data.
-        Args:
-            key (str): a column of self.data or self.aligned_data
-            window (int): size of the rolling window
-            aligned (bool): toogle using aligned or full data
-            kwargs: passed onto pd.rolling
-        Returns:
-            None
+        window: size of the rolling window.
+        key: a column of self.data or self.aligned_data
+        kwargs: passed onto pd.rolling
         """
         kwargs['win_type'] = kwargs.pop('win_type', 'boxcar')
         kwargs['center'] =  kwargs.pop('center', True)
@@ -601,15 +499,7 @@ class Worm(PickleDumpLoadMixin):
             
         
     def calculate_velocity(self, units=None, dt = 1, columns = ['x', 'y']):
-        """
-        Calculate velocity from the coordinates.
-        Args:
-            units (None, optional): units of calculated velocity. If columns are ['x', 'y'] this can be omitted and generated from space and time units automatically.
-            dt (int): frames between frames to calculate velocity from (delta time)
-            columns (list[str]): list of column names to use as coodinates to base velocity calculationon, default is ['x','y']
-        Returns:
-            None
-        """
+        """calculate velocity from the coordinates."""
         try:
             cms = np.stack([self.data[columns[0]], self.data[columns[1]]]).T
             v_cms = cms[dt:]-cms[:-dt]
@@ -628,19 +518,8 @@ class Worm(PickleDumpLoadMixin):
             print('Velocity calculation failed. Continuing.')
         
         
-    def calculate_pumps(self, min_distance,  sensitivity, adaptive_window=None, min_prominence = 0, key = 'pump_clean', use_pyampd = True):
-        """
-        Using a pump trace, get additional pumping metrics.
-        Args:
-            min_distance (int): parameter for peak detection for :func:tools.detect_peaks
-            sensitivity (float): parameter for peak detection for :func:tools.detect_peaks
-            adaptive_window (int):  parameter for peak detection if use_pyampd is True for :func:tools.detect_peaks
-            min_promience (float): parameter for peak detection for :func:tools.detect_peaks
-            key (str): column to detect peaks on, e.g. 'pump_clean', default is 'pump_clean'
-            use_pyampd (bool): if True use pyampd.find_peaks_adaptive else scipy.signal.find_peaks for peak detection, default is True
-        Returns:
-            None
-        """
+    def calculate_pumps(self, min_distance,  sensitivity, adaptive_window, min_prominence = 0, key = 'pump_clean', use_pyampd = True):
+        """using a pump trace, get additional pumping metrics."""
         signal = self.data[key]
         peaks = tools.detect_peaks(signal, adaptive_window, min_distance, min_prominence, sensitivity, use_pyampd)
         if len(peaks)>1:
@@ -657,16 +536,8 @@ class Worm(PickleDumpLoadMixin):
 
         
     def calculate_count_rate(self, window, key='pump_events', **kwargs):
-        """
-        Add a column 'count_rate_'+key to self.data. Calculate a rate based on the number of binary events in a window. 
-        Result will be in Hz.
-        Args:
-            window (int): sliding window for calculation, window is in frame
-            key (str): event column to calculate rate on, default is 'pump_events'. 
-                Column should contain events in binary format, with 1 or True indicating an event occuring.
-        Returns:
-            None
-        """
+        """Add a column 'count_rate' to self.data. Calculate a rate based on the number of binary events in a window. 
+        window is in frame. Result will be in Hz."""
         kwargs['center'] =  kwargs.pop('center', True)
         kwargs['min_periods'] =  kwargs.pop('min_periods', 1)
         self.data[f'count_rate_{key}'] = self.data[key].rolling(window, **kwargs).sum()/window*self.fps
@@ -674,23 +545,19 @@ class Worm(PickleDumpLoadMixin):
 
 
     def calculate_reversals(self, animal_size, angle_threshold, scale = None):
-        """
-        Adaptation of the Hardaker's method to detect reversal event. 
+        """Adaptation of the Hardaker's method to detect reversal event. 
         A single worm's centroid trajectory is re-sampled with a distance interval equivalent to 1/10 
         of the worm's length (100um) and then reversals are calculated from turning angles.
-        Args:
-            animal_size (scalar): animal size in um.
-            angle_threshold (scalar): angle over which a change in direction is called a reversal.
-            scale (float, optional): scale of recording, optional, if None scale is set to self.scale, default is None.
-        Returns: 
-            None, but adds a column 'reversals' to  self.data.
+        Inputs:
+            animal_size: animal size in um.
+            angle_threshold (degree): what defines a turn 
+        Output: None, but adds a column 'reversals' to  self.data.
         """
         # check if the x,y coordintaes need to be rescaled to um later
         if scale is None:
             scale = self.scale
         # resampling
         # Calculate the distance cover by the centroid of the worm between two frames um
-        #TODO: edit so that reversals can be calculated not only on 'velocity'
         cummul_distance = np.cumsum(self.data['velocity'])*self.data['time'].diff()
         # create an array of distances that are animal_size appart for sampling,
         # find the maximum number of worm lengths we have travelled
@@ -725,17 +592,8 @@ class Worm(PickleDumpLoadMixin):
      
 
     def calculate_reversals_nose(self, dt = 1, angle_threshold = 150, w_smooth = 30, min_duration = 30):
-        """
-        Using the motion of the nosetip relative to the center of mass motion to determine reversals.
-        Note: self.centerline must exist.
-        Args:
-            dt (int): frames between frames to calculate reversals from (delta time)
-            angle_threshold (scalar): angle over which a change in direction is called a reversal.
-            w_smooth (int): window size for sliding mean, in frames
-            min_duration (int): minimum duration of reversal, in frames
-        Returns:
-            None
-        """
+        """using the motion of the nosetip relative to the center of mass motion to determine reversals."""
+        
         try:
             cl = self.centerline
         except AttributeError:
@@ -791,14 +649,7 @@ class Worm(PickleDumpLoadMixin):
         
 
     def calculate_nose_speed(self, dt = 1):
-        #TODO: Refactor, with input of what is supposed to be calculated added
-        """
-        Calculate the cms and nose velocities.
-        Args:
-            dt (int): frames between frames to calculate nose speed from
-        Returns:
-            None
-        """
+        """Calculate the cms and nose velocities. """
         try:
             cl = self.centerline
         except AttributeError:
@@ -830,16 +681,13 @@ class Worm(PickleDumpLoadMixin):
 
         
     def align(self, timepoint,  tau_before, tau_after, key = None, column_align = 'frame'): # , **kwargs)
-        """
-        Align data to a single timepoint, including tau_before and tau_after.
-        Args:
-            timepoint (int): time to align to in frames
-            tau_before (int): number of frames before timepoint
-            tau_after (int): number of frames after timepoint
-            key (str, list[str]): column/s to align, if None all columns are aligned, default is None.
-            column_align (str): column by which to align data, default is 'frame'
-        Returns:
-            Series or DataFrame: partition of data, defined by key, centered around timepoint
+        """align to a timepoint.
+         Inputs:
+                timepoint: time to align to in frames
+                tau_before: number of frames before timepoint
+                tau_after: number of frames after timepoint
+                key is a string or list of strings as column names.
+        Output: creates a list of aligned dataframes centered around the timepoint 
         """
         if key is None:
             key = self.data.columns
@@ -863,16 +711,13 @@ class Worm(PickleDumpLoadMixin):
     
 
     def multi_align(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
-        """
-        Align data to multiple timepoints, including tau_before and tau_after.
-        Args:
-            timepoints (list of int): list of timepoints to align to in frames
-            tau_before (int): number of frames before timepoint
-            tau_after (int): number of frames after timepoint
-            key (str, list[str], optional): column/s to align, if None all columns are aligned, default is None.
-            column_align (str): column by which to align data, default is 'frame'
-        Returns:
-            None, but creates self.algined_data, that stores a list of aligned dataframes centered around the timepoints
+        """align to multiple timepoints.
+         Inputs:
+                timepoints: list of timepoints to align to in frames
+                tau_before: number of frames before timepoint
+                tau_after: number of frames after timepoint
+                key is a string or list of strings as column names.
+        Output: creates a dictionary of aligned dataframes centered around the timepoint 
         """
         self.aligned_data = []
         self.timepoints = timepoints
@@ -887,20 +732,6 @@ class Experiment(PickleDumpLoadMixin):
     """Wrapper class which is a container for individual worms."""
     # class attributes
     def __init__(self, strain, condition, scale, fps, scale_units = None, fps_units = None, samples = None, color = None):
-        """
-        Initialize Experiment object with data and metadata.
-        Args:
-            strain (str): strain name, required metadata
-            condition (list): condition of experiment, required metadata
-            scale (float): scale of recording, required metadata
-            fps (int): framerate of timeseries, required metadata
-            scale_units (str): units of scale, if None assumes 'um', default is None
-            fps_units (str): units of framerate, if None assumes 's', default is None
-            samples (list, optional): list of Worm objects, default is None
-            color (str): color for plotting
-        Returns:
-            None
-        """
         self.strain = strain
         self.condition = condition
         self.scale = scale
@@ -928,13 +759,6 @@ class Experiment(PickleDumpLoadMixin):
     
 
     def __add__(self, other):
-        """
-        Add other Experiment to self
-        Args:
-            other (object): Experiment object with same strain and condition as self
-        Returns:
-            Experiment: new experiment object, with added samples
-        """
         assert self.strain == other.strain, "Strains don't match."
         assert self.condition == other.condition, "conditions don't match"
         return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [*self.samples, *other.samples])
@@ -945,13 +769,6 @@ class Experiment(PickleDumpLoadMixin):
 
 
     def __getitem__(self, key):
-        """
-        Get a sample or a slice of samples.
-        Args:
-            key (int or slice): index of samples to return
-        Returns:
-            Experiment: with requested samples
-        """
         if isinstance(key, slice):
             # do your handling for a slice object:
             samples = self.samples[key.start:key.stop:key.step]
@@ -970,25 +787,45 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
+    
     def load_data(self, path, columns = None, append = True, nmax = None, filterword = "", units = None, **kwargs):
         """
         Load all results files from a folder. 
-        Args:
-            path (): location of pharaglow results files
-            columns (list[str]): required columns for analysis.
+        input:
+            path: location of pharaglow results files
+            columns: which colums to load.
             append (bool): append to existing samples. If False, start with an empty experiment.
-            nmax (int, optional): maximum number of samples to load
-            filterword (str, optional): string to load only files containing filterword
-            units (dict, optional): units of columns in loaded files
-        Returns:
-            None
+            nmax: maximum number of samples to load
+            units: units of columns in loaded files
         """
+        # Track if columns were explicitly provided 
+        user_specified_columns = columns is not None
+        # when calls load_data(path) → columns = None → user_specified_columns = False
+        # when calls load_data(path, columns=['x','y']) → columns = [...] → user_specified_columns = True
+        
         if columns is None:
-             columns = ['x', 'y', 'frame', 'pumps']
+             columns = ['x', 'y', 'frame', 'pumps'] # default list when no list specified 
+        
+        # Warn if using only minimal columns 
+        if set(columns) <= {'x', 'y', 'frame'}:
+            warnings.warn(
+                f"Using minimal column set {sorted(columns)}. "
+                "Consider adding additional columns for full analysis.",
+                UserWarning
+            )
+            
         # unit definitions
         if units is None:
             # Use the default UNITS dictionary
             self.units = UNITS.copy()
+            # Warn if user specified columns but not units
+            if user_specified_columns:
+                warnings.warn(
+                    "Columns were specified without explicit units. "
+                    "Using default units from UNITS dictionary. "
+                    "To suppress this warning, provide units as a dict or YAML file path.",
+                    UserWarning
+                )
         elif isinstance(units, str) or isinstance(units, Path):
             with open(units) as stream:
                 try:
@@ -1022,14 +859,13 @@ class Experiment(PickleDumpLoadMixin):
     
     
     def save_wcon(self, filepath, columns = None, tag = '@INF'):
-        """
-        Save the Experiment as a valid wcon json file.
+        """ Save the Experiment as a valid wcon json file.
+
         Args:
-            file_path (str): Path to the output file. should end in .wcon
-            columns (list[str]): columns of data to save as wcon
-            tag (str): custom tag to tag custom metrics, default '@INF'
+            file_path (str) : Path to the output file. should end in .wcon
+            
         Returns:
-            None
+            -
         """
         tmp_dict = {}
         ### create correct structure for wcon
@@ -1096,14 +932,8 @@ class Experiment(PickleDumpLoadMixin):
             
             
     def define_metadata(self, info, units = None):
-        """
-        Add experimental metadata e.g., temperature, detailed conditions,....
-        Args:
-            info (dict): dictionary containing metadata of experiment, must also contain and match 'strain' of Experiment
-            units (dict, optional): dictionary containing units of metadata
-        Returns:
-            None
-        """ 
+        """Add experimental metadata e.g., temperature, detailed conditions,...."""
+        
         if isinstance(info, dict):
             assert info['strain'] == self.strain, 'Ensure that the strain definition in the metadata matches the strain name in the Experiment!'
             self.experiment_metadata = info
@@ -1127,24 +957,16 @@ class Experiment(PickleDumpLoadMixin):
             
         
     def load_stimulus(self, filename):
-        """
-        Load a stimulus file
-        Args:
-            filename (): path to stimulus file
-        """
+        """load a stimulus file"""
         #TODO test and adapt
         self.stimulus = np.loadtxt(filename)
     
     
     def add_column(self, key, values, overwrite = True):
-        """
-        Add a column of data to each worm, using :func:Worm.add_column
-        Args:
-            key (str): name of new (or existing) column. If overwrite is True, existing columns are overwritten.
-            values (Sequence): Array or List containing the values added to each sample in the experiment.
-            overwrite (bool): overwrite column if it exists, default is True
-        Returns:
-            None
+        """add a column of data to each worm. 
+            key: name of new (or existing) column
+            values: Array or List containing the values added to each sample in the experiment.
+            overwrite: overwrite column if it exists.
         """
         assert len(values) == len(self.samples), f'Number of values provided {len(values)} does not match the number of samples in the experiment {len(self.samples)}.'
         for n, worm in enumerate(self.samples):
@@ -1152,40 +974,13 @@ class Experiment(PickleDumpLoadMixin):
 
 
     def align_data(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
-        """
-        Calculate aligned data for all worms, using :func:Worm.multi_align
-        Args:
-            timepoints (list of int): list of timepoints to align to in frames
-            tau_before (int): number of frames before timepoint
-            tau_after (int): number of frames after timepoint
-            key (str, list[str], optional): column/s to align, if None all columns are aligned, default is None.
-            column_align (str): column by which to align data, default is 'frame'
-        Returns:
-            None, but creates self.algined_data for each worm, that stores a list of aligned dataframes centered around the timepoints
-        """
+        """calculate aligned data for all worms"""
         for worm in self.samples:
             worm.multi_align(timepoints, tau_before, tau_after, key = key, column_align = column_align)
 
 
     def calculate_property(self, name, **kwargs):
-        """
-        Calculate additional properties on the whole dataset, calling functions for each worm, using :func:Worm.calculate_property
-        Args:
-            name (str): name of property, if 'help' a list of all options is printed. 
-                Options are:
-                'reversals': :func:self.calculate_reversals,
-                'count_rate': :func:self.calculate_count_rate,
-                'smoothed': :func:self.calculate_smoothed,
-                'pumps': :func:self.calculate_pumps,
-                'nose_speed': :func:self.calculate_nose_speed,
-                'reversals_nose': :func:self.calculate_reversals_nose,
-                'velocity': :func:self.calculate_velocity,
-                'time': :func:self.calculate_time,
-                'preprocess_signal': :func:self.preprocess_signal,
-                'locations': :func:self.calculate_locations,
-        Returns:
-            None
-        """
+        """calculate additional properties on the whole dataset, calling functions for each worm."""
 
         # save metadata
         key = kwargs.pop('key', 'default')
@@ -1205,40 +1000,24 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
     def set_color(self, color):
-        """
-        Sets the color used for plotting this experiment. Can be a defined color string or hex-code.
-        Anything that matplotlib understands is valid.
-        Args:
-            color (str): color string
-        Returns:
-            None
+        """sets the color used for plotting this experiment. Can be a defined color string or hex-code.
+            Anything that matplotlib understands is valid.
         """
         self.color = color
 
 
     def get_sample(self, N):
-        """
-        Get a sample of the experiment.
-        Args:
-            N (int): index of sample to return
-        Returns:
-            Worm: sample in form of Worm() object
+        """get a sample of the experiment.
+            Returns a Worm() object
         """
         return self.samples[N]
 
     def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = True):
-        #TODO: rename function to make use more obvious
-        #TODO: use get_metric and introduce axis=None there, then call here with axis=0 or axis=1
-        """
-        Metrics across samples as a function of time (axis = 1) or averaged over time a function of samples (axis = 0).
-        Args:
-            key (str): column of data to calculate metric from
-            metric (str): metric to calculate. Must be one of ['sum','mean','std','N','sem','median','rate','collapse','max','min']
-            filterfunction (callable): should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
-            axis (int): axis = 1 returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged metric of each sample in the data.
-            ignore_index (bool): TODO
-        Returns:
-            Scalar: metric of requested key over requested axis
+        """ Metrics across samples as a function of time (axis = 1) or averaged over time a function of samples (axis = 0).
+            metric: one of 'sum', 'mean', 'std', 'N', 'sem', 'median', rate', 'collapse', 'max' or 'min'
+            filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
+            axis: axis = 1 - returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged/metric of each sample in the data.
+            ignore_index: TODO
         """
         tmp = []
         for worm in self.samples:
@@ -1278,21 +1057,12 @@ class Experiment(PickleDumpLoadMixin):
 
 
     def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
-        #TODO: rename function to make use more obvious
-        #TODO: use get_metric and introduce axis=None there, then call here with axis=0 or axis=1
-        """ 
-        Aligned metrics across samples as a function of time (axis = 1) or averaged over time a function of samples (axis = 0). 
+        """ Metrics across samples. 
+            metric_sample is the function applied across the worms in this experiment.
+            metric_timepoints is the function applied across stimuli (this is trivial if only one time alignment existed.)
+            filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             e.g. get_aligned_sample_metric('velocity', 'mean', 'mean') would return the mean(mean(v, N_timepoints), N_worms).
-        Args:
-            metric_sample (str): is the function applied across the worms in this experiment.
-            metric_timepoints (str): is the function applied across stimuli (this is trivial if only one time alignment existed.)
-            filterfunction (callable): should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
-            key (str): column to get metric from
-            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N']
-            filterfunction (callable): a callable that returns a boolean for each entry in the series data[key]. 
-                For example a function that filters for values over 5, i.e. returns True for values below 5. Default is None.
-        Returns:
-            Scalar: metric of requested key
+
         """
         tmp = []
         for worm in self.samples:
@@ -1334,14 +1104,10 @@ class Experiment(PickleDumpLoadMixin):
     
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
-        """ 
-        Get peak locations for all samples, using :func:Worm.get_events
-        Args:
-            events (str): column to get events from, must contain events encoded in binary format, with 1 or True signifying an event occuring.
-            unit (str): column of data at which to evaluate e.g. 'time'. Default is 'index'
-            aligned (bool): Toggle using aligned or full data
-        Returns:
-            list: list of DataFrames containing events 
+        """ get peak locations for all samples.
+            events: column with binary entries. 
+            unit: column of data at which to evaluate e.g. 'time'
+            return: list of peaks.
         """
         tmp = []
         for worm in self.samples:
@@ -1354,33 +1120,16 @@ class Experiment(PickleDumpLoadMixin):
     #######################################
 
     def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  apply_to_x = True, **kwargs):
-        """
-        Plot the experiment.
-        #TODO: work further on docstring
-        Args:
-            ax (matplotlib.pyplot.axes or list): either matplotlib axis object or list of axes
-            keys (): list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
-            metric (): is the function applied across time (or stimuli for aligned data)
-            metric_sample (): is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_sample_x and metric_sample_y (=[''mean','N'])
-            plot_type (str): which plot type to use
-                Options are:
-                    - 'line': :func:_lineplot
-                    - 'histogram': :func:_hist
-                    - 'scatter': :func:_scatter
-                    - 'density': :func:_scatter
-                    - 'xy_error_scatter': :func:_scatter
-                    - 'heatmap': :func:_heatmap
-                    - 'bar': :func:_bar
-            metric_error (): 
-            filterfunction (): should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
-            aligned (): Use self.samples.aligned_data or self.samples.data
-            axis (int or None): only used if aligned = True: axis = 1 metric across columns -> result is a timeseries axis = 0 metric across rows -> results is one for each sample/worm or stimulus.
-            apply_to_x (bool): apply the same metric to the x-axis/first key. Set to False if you want to plot e.g., a timeseries
-        Returns
-            tuple containing
-                - plot
-                - x (Series): data on x-axis
-                - y (Series): data on y-axis
+        """plot the experiment.
+            keys: list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
+            metric_sample: is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_sample_x and metric_sample_y (=[''mean','N'])
+            metric: is the function applied across time (or stimuli for aligned data)
+            filterfunction should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
+            aligned: Use self.samples.aligned_data or self.samples.data
+            ax: either matplotlib axis object or list of axes
+            metric: if true, plot the sample metric of each key
+            axis: only used if aligned = True: axis = 1 metric across columns -> result is a timeseries axis = 0 metric across rows -> results is one for each sample/worm or stimulus.
+            apply_to_x: apply the same metric to the x-axis/first key. Set to False if you want to plot e.g., a timeseries
         """
         if isinstance(keys, list) or isinstance(keys, tuple):
             key_x, key_y = keys[:2]
