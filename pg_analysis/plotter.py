@@ -1421,7 +1421,7 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
 
-    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  apply_to_x = True, **kwargs):
+    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, category = None, axis = 1,  apply_to_x = True, **kwargs):
         """
         Plot the experiment.
         #TODO: work further on docstring
@@ -1459,7 +1459,7 @@ class Experiment(PickleDumpLoadMixin):
             raise ValueError(f'The entry for keys {keys} is not valid.')
         xerr = None
         yerr = None
-        
+    
         
         if metric_sample == None:
             metric_sample_x = None
@@ -1470,8 +1470,16 @@ class Experiment(PickleDumpLoadMixin):
         else:
             metric_sample_x = metric_sample[0]
             metric_sample_y = metric_sample[1]
-            
-        if aligned:
+        
+        if category is not None:
+            y = self.get_sample_metric_categorical(
+                key=key_y,
+                category=category,
+                metric=metric
+            )
+            x = y.index
+
+        elif aligned:
             # time is not meaningful, choose a different key
             if key_x == 'time':
 
@@ -1487,8 +1495,6 @@ class Experiment(PickleDumpLoadMixin):
             
             y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
             
-
-                
             if metric_error is not None:
                 xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction, axis)
                 yerr = self.get_aligned_sample_metric(key_y, metric_error, metric, filterfunction, axis)
@@ -1515,6 +1521,8 @@ class Experiment(PickleDumpLoadMixin):
             else:
                 warnings.warn('Pick either a sample or timeseries metric. Both reducing operations are not meaningful to plot.')
                 return None, None, None
+        
+ 
         # check if user overrode color keyword
         kwargs['color'] =  kwargs.pop('color', self.color)
         
@@ -1522,7 +1530,20 @@ class Experiment(PickleDumpLoadMixin):
             plot = _lineplot(x ,y, yerr, ax, **kwargs)
 
         elif plot_type == 'histogram':
-            plot = _hist(y, ax , **kwargs)
+            if category is not None:
+                kwargs.pop('category', None)
+                # one histogram per category  categories in rows
+                for cat in x:
+
+                    _hist(
+                        y.loc[cat,:].dropna().values,
+                        ax,
+                        label=str(cat),
+                        **kwargs
+                    )
+                plot = ax
+            else:
+                plot = _hist(y, ax, **kwargs)
 
         elif plot_type == 'scatter':
             plot = _scatter(x, y, None, yerr, ax, density = False, **kwargs)
@@ -1548,11 +1569,36 @@ class Experiment(PickleDumpLoadMixin):
         #     plot = style.scatterBoxplot(ax, [loc], [y], [color], [self.strain], **kwargs)
             
         elif plot_type == 'box':
-            loc = kwargs.pop('loc', 0)
             color = kwargs.pop('color', self.color)
-            lbls = kwargs.pop('lbls', self.strain)
-            plot = style.scatterBoxplot(ax,  x_data = [loc], y_data = [y], clrs = [color], lbls = [lbls], **kwargs)
-           
+            if category is not None:
+                y_data = y.values
+                lbls = list(x)
+                clrs = [color] * len(lbls)
+                print(list(range(len(x))),
+                    y_data,)
+                plot = style.scatterBoxplot(
+                    ax,
+                    x_data=list(range(len(x))),
+                    y_data=y_data,
+                    clrs=clrs,
+                    lbls=lbls,
+                    **kwargs
+                )
+                ax.set_xticks(range(len(lbls)))
+                ax.set_xticklabels(lbls)
+
+            else:
+                loc = kwargs.pop('loc', 0)
+                lbls = kwargs.pop('lbls', self.strain)
+
+                plot = style.scatterBoxplot(
+                    ax,
+                    x_data=[loc],
+                    y_data=[y],
+                    clrs=[color],
+                    lbls=[lbls],
+                    **kwargs
+                )
                     
         else:
              raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
