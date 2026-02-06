@@ -370,6 +370,37 @@ class Worm(PickleDumpLoadMixin):
             tmp = tmp.loc[filtercondition]
         return tools.calc_metric(tmp, metric, axis=1, key=key)
 
+    def get_metric_categorical(self, key, category, metric):
+        """
+        Get statistics across categories for a single worm. eg. average velocity during reversal. 
+        Args:
+            key (str): column to get metric from
+            category (str): categorical column to get metric for
+            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'median', 'max', 'min' or 'N']
+        Returns:
+            pd.DataFrame: dataframe with categories as index and metric of requested key as values
+        """
+        tmp = self.data.groupby(category)[key]
+        if metric == "sum":
+            return tmp.sum()
+        if metric == "mean":
+            return tmp.mean()
+        if metric == "std":
+            return tmp.std()
+        if metric == "N":
+            return tmp.count()
+        if metric == "sem":
+            return tmp.std()/self.get_sample_metric(key, 'N')**0.5
+        if metric == "median":
+            return tmp.median()
+        if metric == 'max':
+            return tmp.max()
+        if metric == 'min':
+            return tmp.min()
+        else:
+            raise Exception("Metric not implemented, choose one of 'mean','mean_%', 'std', 'sem', 'sum', 'median', 'max', 'min' or 'N'")
+
+
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
         """
@@ -1009,6 +1040,7 @@ class Experiment(PickleDumpLoadMixin):
     
     
     def save_wcon(self, filepath, columns = None, tag = '@INF'):
+        #TODO: add read wcon function
         """
         Save the Experiment as a valid wcon json file.
         Args:
@@ -1272,6 +1304,21 @@ class Experiment(PickleDumpLoadMixin):
             tmp = tmp.loc[:,filtercondition]
         return tools.calc_metric(tmp, metric, axis=axis, key=key)
     
+
+    def get_sample_metric_categorical(self, key, category, metric):  
+        """
+        Categorical metrics across samples.
+        Args:
+            key (str): column of data to calculate metric from
+            category (str): category column with which to group data
+            metric (str): metric to calculate. Must be one of ['sum','mean','std','N','sem','median','max','min']
+        Returns:
+            Scalar: metric of requested key over requested axis
+        """
+        tmp = []
+        for worm in self.samples:
+            tmp.append(worm.get_metric_categorical(key, category, metric))
+        return pd.concat(tmp, axis=1)
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
         """ 

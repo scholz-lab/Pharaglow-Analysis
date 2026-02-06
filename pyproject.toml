@@ -1,0 +1,39 @@
+[project]
+name = "pumping"
+version = "0.0.0"
+description = "uv environment for pharaglow, pharaglow-analysis and similar."
+
+requires-python = ">=3.10"
+
+dependencies = [
+    # Core scientific stack
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pandas>=2.1",
+    "numba>=0.59",
+    # Visualization
+    "matplotlib>=3.8",
+    # IO and formats
+    "h5py>=3.10",
+    "tables>=3.9",
+    "pillow>=10.0",
+    "tifffile>=2024.1.30",
+    "imagecodecs>=2024.1.1",
+    # Image processing and tracking
+    "scikit-image>=0.23",
+    "trackpy>=0.6",
+    "pims>=0.6",
+    # Machine learning
+    "scikit-learn>=1.4",
+    # Jupyter ecosystem
+    "jupyter>=1.0",
+    "notebook>=7.0",
+    "nbconvert>=7.14",
+    "nbformat>=5.10",
+    "ipykernel>=6.29",
+    # Workflow
+    "papermill>=2.5",
+    # Misc
+    "pyampd>=0.0.1",
+    "requests>=2.32.4",
+]
