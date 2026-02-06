@@ -1343,16 +1343,16 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
 
-    def plot(self, ax, keys, metric = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  apply_to_x = True, **kwargs):
+    def plot(self, ax, keys, metric = None, axis = 1,  plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, apply_to_x = True, **kwargs):
         """
-        Plot the experiment.
+        Plot the experiment, using varity of plot types. 
         #TODO: work further on docstring
         Args:
             ax (matplotlib.pyplot.axes or list): either matplotlib axis object or list of axes
-            keys (): list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
-            metric (): is the function applied across time (or stimuli for aligned data)
-            metric_sample (): is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_x and metric_y (=[''mean','N'])
-            plot_type (str): which plot type to use
+            keys (str or list): list of strings or single string, column of data in the Worm object. Will use 'time' for x-axis if not keys is not a listt
+            metric (None or str or list of str): metric to plot, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N'], if None raw data is plotted
+            axis (int): axis = 1 plots the sample-averaged timeseries of the data, axis = 0 plots the time-averaged metric of each sample in the data.
+            plot_type (str): which plot type to use, default is 'line'
                 Options are:
                     - 'line': :func:_lineplot
                     - 'histogram': :func:_hist
@@ -1361,11 +1361,10 @@ class Experiment(PickleDumpLoadMixin):
                     - 'xy_error_scatter': :func:_scatter
                     - 'heatmap': :func:_heatmap
                     - 'bar': :func:_bar
-            metric_error (): 
-            filterfunction (): should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
-            aligned (): Use self.samples.aligned_data or self.samples.data
-            axis (int or None): only used if aligned = True: axis = 1 metric across columns -> result is a timeseries axis = 0 metric across rows -> results is one for each sample/worm or stimulus.
-            apply_to_x (bool): apply the same metric to the x-axis/first key. Set to False if you want to plot e.g., a timeseries
+            metric_error (None or str): metric to use as error.
+            filterfunction (callable): should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
+            aligned (bool): Use self.samples.aligned_data or self.samples.data. Default False.
+            apply_to_x (bool): apply the same metric to the x-axis/first key. Set to False if you want to plot e.g., a timeseries. Default is True.
         Returns
             tuple containing
                 - plot
