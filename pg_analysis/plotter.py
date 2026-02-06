@@ -308,11 +308,6 @@ class Worm(PickleDumpLoadMixin):
        
         self.data = traj
         self.data = self.data.reset_index()
-    
-    def load_test(self, traj, units):
-        self.units = UNITS
-        self.data = traj
-        self.data = self.data.reset_index()
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
