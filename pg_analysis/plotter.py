@@ -308,7 +308,11 @@ class Worm(PickleDumpLoadMixin):
        
         self.data = traj
         self.data = self.data.reset_index()
-
+    
+    def load_test(self, traj, units):
+        self.units = UNITS
+        self.data = traj
+        self.data = self.data.reset_index()
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -342,7 +346,6 @@ class Worm(PickleDumpLoadMixin):
             Scalar: metric of requested key
         """
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
-        assert 
         tmp = self.data.set_index('frame')[key]
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
@@ -1291,12 +1294,12 @@ class Experiment(PickleDumpLoadMixin):
         tmp = []
         for worm in self.samples:
             # if we give no metric, all stimuli will be attached.
-            assert axis in (0,1) "'axis' must be either 0 (time-averaged metric of each sample) or 1 (sample-averaged timeseries)"
+            assert axis in (0,1), f"'axis' must be either 0 (time-averaged metric of each sample) or 1 (sample-averaged timeseries), but is {axis}"
             if axis == 1:
                 tmp.append(worm.get_data_aligned(key))
                 #tmp = pd.concat(tmp, axis = 1)
-            else axis == 0:
-                tmp.append(worm.get_aligned_metric(key, metric_timepoints))
+            else:
+                tmp.append(worm.get_aligned_metric(key, metric))
         tmp = pd.concat(tmp, axis = 1)
         tmp.columns = [f'{x}_{i}' for i, x in enumerate(tmp.columns, 1)]
         if filterfunction is not None:
@@ -1340,7 +1343,7 @@ class Experiment(PickleDumpLoadMixin):
     #
     #######################################
 
-    def plot(self, ax, keys, metric, metric_sample = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  apply_to_x = True, **kwargs):
+    def plot(self, ax, keys, metric = None, plot_type = 'line', metric_error = None, filterfunction = None, aligned = False, axis = 1,  apply_to_x = True, **kwargs):
         """
         Plot the experiment.
         #TODO: work further on docstring
@@ -1348,7 +1351,7 @@ class Experiment(PickleDumpLoadMixin):
             ax (matplotlib.pyplot.axes or list): either matplotlib axis object or list of axes
             keys (): list of strings or single string, column of data in the Worm object. Will use 'time' for x if using a 2d plot style., ...
             metric (): is the function applied across time (or stimuli for aligned data)
-            metric_sample (): is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_sample_x and metric_sample_y (=[''mean','N'])
+            metric_sample (): is the function applied across the worms in this experiment ; can be a single None OR a single string variable (='mean') OR a list with metric_x and metric_y (=[''mean','N'])
             plot_type (str): which plot type to use
                 Options are:
                     - 'line': :func:_lineplot
@@ -1376,64 +1379,48 @@ class Experiment(PickleDumpLoadMixin):
             key_x = 'time'
         else:
             raise ValueError(f'The entry for keys {keys} is not valid.')
+
+        if isinstance(metric, list):
+            metric_x, metric_y = metric[:2]
+        else:
+            metric_x, metric_y = metric, metric
         xerr = None
         yerr = None
         
-        
-        if metric_sample == None:
-            metric_sample_x = None
-            metric_sample_y = None
-        elif isinstance(metric_sample, str):
-            metric_sample_x = metric_sample
-            metric_sample_y = metric_sample
-        else:
-            metric_sample_x = metric_sample[0]
-            metric_sample_y = metric_sample[1]
-            
+        print_axis = {0: 'time', 1: 'sample'}
+        print(f"Plot shows {print_axis[axis]}-{metric_y} for {key_y} over {print_axis[axis]}-{metric_x if apply_to_x else 'mean'} for {key_x}.{' Using aligned data.' if aligned else ''}")
+
         if aligned:
             # time is not meaningful, choose a different key
             if key_x == 'time':
-
-                key_x = 'time_align'
+                key_x = 'time_aligned'
             if apply_to_x:
-                x = self.get_aligned_sample_metric(key_x, metric_sample, metric, filterfunction, axis)
+                x = self.get_aligned_sample_metric(key_x, metric_x, filterfunction, axis)
             else:
-                if metric_sample is not None:
-                    x = self.get_aligned_sample_metric(key_x, 'mean', None, filterfunction, axis)
-                elif metric is not None:
-                    x = self.get_aligned_sample_metric(key_x, None, 'mean', filterfunction, axis)
+                x = self.get_aligned_sample_metric(key_x, 'mean', filterfunction, axis)
                 
-            
-            y = self.get_aligned_sample_metric(key_y, metric_sample, metric, filterfunction, axis)
-            
-
-                
+            y = self.get_aligned_sample_metric(key_y, metric_y, filterfunction, axis)
             if metric_error is not None:
-                xerr = self.get_aligned_sample_metric(key_x, metric_error, metric, filterfunction, axis)
-                yerr = self.get_aligned_sample_metric(key_y, metric_error, metric, filterfunction, axis)
+                xerr = self.get_aligned_sample_metric(key_x, metric_error, filterfunction, axis)
+                yerr = self.get_aligned_sample_metric(key_y, metric_error, filterfunction, axis)
+
         else:
-            if metric == None and metric_sample == None:
+            if not isinstance(metric, list):
                 # return the full joined data array of all samples
-                x = self.get_sample_metric(key_x, None, filterfunction)
-                y = self.get_sample_metric(key_y, None, filterfunction)
-            elif metric_sample == None:
-                # return metric for each worm - result will be Nsamples long
-                x = self.get_sample_metric(key_x, metric, filterfunction, axis = 0)
-                y = self.get_sample_metric(key_y, metric, filterfunction, axis = 0)
+                x = self.get_sample_metric(key_x, metric_x, filterfunction, axis)
+                y = self.get_sample_metric(key_y, metric_y, filterfunction, axis)
                 if metric_error is not None:
-                    xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis = 0)
-                    yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis = 0)
-            elif metric == None:
+                    xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis)
+                    yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis)
+            else:
                 # return the metric across each trajectory(Worm) - result will be an average across samples
                 warnings.warn('This option keeps the dataframe index while applying the sample metric which is rarely meaningful. You probably want to align all datasets to their t=0 and rerun with the aligned option.')
-                x = self.get_sample_metric(key_x, metric_sample_x, filterfunction, axis = 1)
-                y = self.get_sample_metric(key_y, metric_sample_y, filterfunction, axis = 1)
+                x = self.get_sample_metric(key_x, metric_x, filterfunction, axis)
+                y = self.get_sample_metric(key_y, metric_y, filterfunction, axis)
                 if metric_error is not None:
-                    xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis = 1)
-                    yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis = 1)
-            else:
-                warnings.warn('Pick either a sample or timeseries metric. Both reducing operations are not meaningful to plot.')
-                return None, None, None
+                    xerr = self.get_sample_metric(key_x, metric_error, filterfunction, axis)
+                    yerr = self.get_sample_metric(key_y, metric_error, filterfunction, axis)
+
         # check if user overrode color keyword
         kwargs['color'] =  kwargs.pop('color', self.color)
         
