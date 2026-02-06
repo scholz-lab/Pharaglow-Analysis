@@ -4,6 +4,7 @@ import errno
 import pickle
 
 import numpy as np
+import pandas as pd
 
 from collections.abc import Mapping
 from datetime import datetime
@@ -238,3 +239,35 @@ def set_token(token_dir):
 def check_token(token_dir):
     """ Check for a token, symbolizing the process has finished """
     return os.path.isfile(os.path.join(token_dir, 'done.token'))
+
+def calc_metric(tmp, metric, axis=0, key=None):
+    """Calls metric calculation on pandas Dataframe or Series"""
+    kwargs = {}
+    if axis is not None:
+        kwargs = {'axis':axis}
+
+    if metric == None:
+        return tmp
+    if metric == "sum":
+        return tmp.sum(**kwargs)
+    if metric == "mean":
+        return tmp.mean(**kwargs)
+    if metric == "std":
+        return tmp.std(**kwargs)
+    if metric == "N":
+        return tmp.count(**kwargs)
+    if metric == "sem":
+        return tmp.std(**kwargs)/np.sqrt(tmp.count(**kwargs))
+    if metric == "median":
+        return tmp.median(**kwargs)
+    if metric == "rate":
+        return tmp.sum(**kwargs)/tmp.count(**kwargs)
+    if metric == 'max':
+        return tmp.max(**kwargs)
+    if metric == 'min':
+        return tmp.min(**kwargs)
+    if metric == "collapse":
+        return pd.DataFrame(tmp.values.ravel(), columns = [key])
+    else:
+        raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem' , 'sum', 'rate', 'median', 'max', 'min', 'N' or 'collapse'")
+
