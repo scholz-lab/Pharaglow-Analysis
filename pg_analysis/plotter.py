@@ -384,24 +384,7 @@ class Worm(PickleDumpLoadMixin):
             pd.DataFrame: dataframe with categories as index and metric of requested key as values
         """
         tmp = self.data.groupby(category)[key]
-        if metric == "sum":
-            return tmp.sum()
-        if metric == "mean":
-            return tmp.mean()
-        if metric == "std":
-            return tmp.std()
-        if metric == "N":
-            return tmp.count()
-        if metric == "sem":
-            return tmp.std()/self.get_sample_metric(key, 'N')**0.5
-        if metric == "median":
-            return tmp.median()
-        if metric == 'max':
-            return tmp.max()
-        if metric == 'min':
-            return tmp.min()
-        else:
-            raise Exception("Metric not implemented, choose one of 'mean','mean_%', 'std', 'sem', 'sum', 'median', 'max', 'min' or 'N'")
+        return tools.calc_metric(tmp, metric, axis=0, key=key)
 
 
 
