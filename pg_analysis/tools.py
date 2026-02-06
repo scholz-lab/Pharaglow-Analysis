@@ -4,6 +4,7 @@ import errno
 import pickle
 
 import numpy as np
+import pandas as pd
 
 from collections.abc import Mapping
 from datetime import datetime
@@ -241,26 +242,30 @@ def check_token(token_dir):
 
 def calc_metric(tmp, metric, axis=0, key=None):
     """Calls metric calculation on pandas Dataframe or Series"""
+    kwargs = {}
+    if axis is not None:
+        kwargs = {'axis':axis}
+
     if metric == None:
         return tmp
     if metric == "sum":
-        return tmp.sum(axis=axis)
+        return tmp.sum(**kwargs)
     if metric == "mean":
-        return tmp.mean(axis=axis)
+        return tmp.mean(**kwargs)
     if metric == "std":
-        return tmp.std(axis=axis)
+        return tmp.std(**kwargs)
     if metric == "N":
-        return tmp.count(axis=axis)
+        return tmp.count(**kwargs)
     if metric == "sem":
-        return tmp.std(axis=axis)/np.sqrt(tmp.count(axis=axis))
+        return tmp.std(**kwargs)/np.sqrt(tmp.count(**kwargs))
     if metric == "median":
-        return tmp.median(axis=axis)
+        return tmp.median(**kwargs)
     if metric == "rate":
-        return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
+        return tmp.sum(**kwargs)/tmp.count(**kwargs)
     if metric == 'max':
-        return tmp.max(axis=axis)
+        return tmp.max(**kwargs)
     if metric == 'min':
-        return tmp.min(axis=axis)
+        return tmp.min(**kwargs)
     if metric == "collapse":
         return pd.DataFrame(tmp.values.ravel(), columns = [key])
     else:

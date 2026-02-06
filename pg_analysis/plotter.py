@@ -354,7 +354,7 @@ class Worm(PickleDumpLoadMixin):
         Requires multi_align(self) to be run first.
         Args:
             key (str): column to get metric from
-            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N']
+            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate', 'max', 'min' or 'N']
             filterfunction (callable): a callable that returns a boolean for each entry in the series data[key]. 
                 For example a function that filters for values over 5, i.e. returns True for values below 5. Default is None.
         Returns:
@@ -374,12 +374,15 @@ class Worm(PickleDumpLoadMixin):
         Args:
             key (str): column to get metric from
             category (str): categorical column to get metric for
-            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'median', 'max', 'min' or 'N']
+            metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum',  'max', 'min' or 'N']
         Returns:
             pd.DataFrame: dataframe with categories as index and metric of requested key as values
         """
+        if metric in ['rate', 'collapse']:
+            print(metric)
+            raise NotImplementedError(f'metric {metric} not implemented for categorical data.')
         tmp = self.data.groupby(category)[key]
-        return tools.calc_metric(tmp, metric, axis=0, key=key)
+        return tools.calc_metric(tmp, metric, axis=None, key=key)
 
 
 
