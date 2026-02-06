@@ -238,3 +238,31 @@ def set_token(token_dir):
 def check_token(token_dir):
     """ Check for a token, symbolizing the process has finished """
     return os.path.isfile(os.path.join(token_dir, 'done.token'))
+
+def calc_metric(tmp, metric, axis=0, key=None):
+    """Calls metric calculation on pandas Dataframe or Series"""
+    if metric == None:
+        return tmp
+    if metric == "sum":
+        return tmp.sum(axis=axis)
+    if metric == "mean":
+        return tmp.mean(axis=axis)
+    if metric == "std":
+        return tmp.std(axis=axis)
+    if metric == "N":
+        return tmp.count(axis=axis)
+    if metric == "sem":
+        return tmp.std(axis=axis)/np.sqrt(tmp.count(axis=axis))
+    if metric == "median":
+        return tmp.median(axis=axis)
+    if metric == "rate":
+        return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
+    if metric == 'max':
+        return tmp.max(axis=axis)
+    if metric == 'min':
+        return tmp.min(axis=axis)
+    if metric == "collapse":
+        return pd.DataFrame(tmp.values.ravel(), columns = [key])
+    else:
+        raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem' , 'sum', 'rate', 'median', 'max', 'min', 'N' or 'collapse'")
+

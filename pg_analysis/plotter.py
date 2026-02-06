@@ -327,6 +327,7 @@ class Worm(PickleDumpLoadMixin):
         """Create a unique ID matching raw data."""
         self.id = f"{self.experiment}_{self.particle_index}"
         
+    
         
     def get_metric(self, key, metric, filterfunction = None):
         """
@@ -336,36 +337,18 @@ class Worm(PickleDumpLoadMixin):
             metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N']
             filterfunction (callable): a callable that returns a boolean for each entry in the series data[key]. 
                 For example a function that filters for values over 5, i.e. returns True for values below 5. Default is None.
+            axis (int): 
         Returns:
             Scalar: metric of requested key
         """
         assert key in self.data.columns, f'The key {key} does not exist in the data.'
+        assert 
         tmp = self.data.set_index('frame')[key]
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
             tmp = tmp.loc[filtercondition]
-
-        if metric == "sum":
-            return tmp.sum()
-        if metric == "mean":
-            return tmp.mean()
-        if metric == "std":
-            return tmp.std()
-        if metric == "N":
-            return tmp.count()
-        if metric == "sem":
-            return tmp.std()/np.sqrt(tmp.count())
-        if metric == "median":
-            return tmp.median()
-        if metric == "rate":
-            return tmp.sum()/tmp.count()*self.fps
-        if metric == 'max':
-            return tmp.max()
-        if metric == 'min':
-            return tmp.min()
-        else:
-            raise Exception("Metric not implemented, choose one of 'mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N'")
-    
+        return tools.calc_metric(tmp, metric, axis=0, key=key)
+            
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
         """
@@ -385,24 +368,7 @@ class Worm(PickleDumpLoadMixin):
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
             tmp = tmp.loc[filtercondition]
-        if metric == "sum":
-            return tmp.sum(axis = 1)
-        if metric == "mean":
-            return tmp.mean(axis = 1)
-        if metric == "std":
-            return tmp.std(axis = 1)
-        if metric == "N":
-            return tmp.count(axis =1)
-        if metric == "sem":
-            return tmp.std(axis = 1)/np.sqrt(tmp.count(axis=1))
-        if metric == 'median':
-            return tmp.median(axis = 1)
-        if metric == 'max':
-            return tmp.max(axis = 1)
-        if metric == 'min':
-            return tmp.min(axis = 1)
-        else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'median', 'std', 'sem', 'sum,','median', 'max', 'min' or 'N'")
+        return tools.calc_metric(tmp, metric, axis=1, key=key)
 
 
     def get_data(self, key = None, aligned = False, index_column = 'frame'):
@@ -1248,16 +1214,15 @@ class Experiment(PickleDumpLoadMixin):
         return self.samples[N]
 
     def get_sample_metric(self, key, metric = None, filterfunction = None, axis = 1, ignore_index = True):
-        #TODO: rename function to make use more obvious
-        #TODO: use get_metric and introduce axis=None there, then call here with axis=0 or axis=1
         """
         Metrics across samples as a function of time (axis = 1) or averaged over time a function of samples (axis = 0).
+        Requires align_data(self) to be run first.
         Args:
             key (str): column of data to calculate metric from
             metric (str): metric to calculate. Must be one of ['sum','mean','std','N','sem','median','rate','collapse','max','min']
             filterfunction (callable): should be a callable that will be applied to each sample and evaluate to True or False for each aligned dataset.
             axis (int): axis = 1 returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged metric of each sample in the data.
-            ignore_index (bool): TODO
+            ignore_index (bool): Not implemented. TODO
         Returns:
             Scalar: metric of requested key over requested axis
         """
@@ -1270,40 +1235,15 @@ class Experiment(PickleDumpLoadMixin):
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
         tmp.columns = [f'{x}_{i}' for i, x in enumerate(tmp.columns, 1)]
-        if metric == None:
-            return tmp
-        if metric == "sum":
-            return tmp.sum(axis = axis)
-        if metric == "mean":
-            return tmp.mean(axis = axis)
-        if metric == "mean_%":
-            return tmp.mean(axis=1)*100
-        if metric == "std":
-            return tmp.std(axis = axis)
-        if metric == "N":
-            return tmp.count(axis = axis)
-        if metric == "sem":
-            return tmp.std(axis = axis)/self.get_sample_metric(key, 'N', axis=axis)**0.5
-        if metric == "median":
-            return tmp.median(axis = axis)
-        if metric == "rate":
-            return tmp.sum(axis=axis)/tmp.count(axis=axis)*self.fps
-        if metric == "collapse":
-            return pd.DataFrame(tmp.values.ravel(), columns = [key])
-        if metric == 'max':
-            return tmp.max(axis = axis)
-        if metric == 'min':
-            return tmp.min(axis = axis)
-        else:
-            raise Exception("Metric not implemented, choose one of 'mean','mean_%', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
+        
+        return tools.calc_metric(tmp, metric, axis=axis, key=key)
 
 
-    def get_aligned_sample_metric(self, key, metric_sample = None, metric_timepoints =  'mean', filterfunction = None, axis = 1):
-        #TODO: rename function to make use more obvious
-        #TODO: use get_metric and introduce axis=None there, then call here with axis=0 or axis=1
+    def get_aligned_sample_metric(self, key, metric = None, filterfunction = None, axis = 1):
         """ 
-        Aligned metrics across samples as a function of time (axis = 1) or averaged over time a function of samples (axis = 0). 
+        Aligned metrics across samples as a function of time (axis = 1) or averaged over time as a function of samples (axis = 0). 
             e.g. get_aligned_sample_metric('velocity', 'mean', 'mean') would return the mean(mean(v, N_timepoints), N_worms).
+        Requires align_data(self) to be run first.
         Args:
             metric_sample (str): is the function applied across the worms in this experiment.
             metric_timepoints (str): is the function applied across stimuli (this is trivial if only one time alignment existed.)
@@ -1312,46 +1252,25 @@ class Experiment(PickleDumpLoadMixin):
             metric (str): metric to calculate, must be one of ['mean','median', 'std', 'sem' , 'sum', 'rate','median', 'max', 'min' or 'N']
             filterfunction (callable): a callable that returns a boolean for each entry in the series data[key]. 
                 For example a function that filters for values over 5, i.e. returns True for values below 5. Default is None.
+            axis (int): axis = 1 returns the sample-averaged timeseries of the data, axis = 0 returns the time-averaged metric of each sample in the data.
         Returns:
             Scalar: metric of requested key
         """
         tmp = []
         for worm in self.samples:
             # if we give no metric, all stimuli will be attached.
-            if metric_timepoints == None:
+            assert axis in (0,1) "'axis' must be either 0 (time-averaged metric of each sample) or 1 (sample-averaged timeseries)"
+            if axis == 1:
                 tmp.append(worm.get_data_aligned(key))
                 #tmp = pd.concat(tmp, axis = 1)
-            else:
+            else axis == 0:
                 tmp.append(worm.get_aligned_metric(key, metric_timepoints))
         tmp = pd.concat(tmp, axis = 1)
         tmp.columns = [f'{x}_{i}' for i, x in enumerate(tmp.columns, 1)]
         if filterfunction is not None:
             filtercondition = tmp.apply(filterfunction)
             tmp = tmp.loc[:,filtercondition]
-        if metric_sample == None:
-            return tmp
-        if metric_sample == "sum":
-            return tmp.sum(axis = axis)
-        if metric_sample == "mean":
-            return tmp.mean(axis = axis)
-        if metric_sample == "mean_%":
-            return tmp.mean(axis = axis)*100
-        if metric_sample == "std":
-            return tmp.std(axis = axis)
-        if metric_sample == "N":
-            return tmp.count(axis = axis)
-        if metric_sample == "median":
-            return tmp.median(axis = axis)
-        if metric_sample == "sem":
-            return tmp.std(axis = axis)/self.get_aligned_sample_metric(key, 'N', axis = axis)**0.5
-        if metric_sample == "collapse":
-            return pd.DataFrame(tmp.values.ravel(), columns=[key])
-        if metric_sample == 'max':
-            return tmp.max(axis = axis)
-        if metric_sample == 'min':
-            return tmp.min(axis = axis)
-        else:
-            raise Exception("Metric not implemented, choose one of 'mean', 'mean_%', 'std', 'sem', 'sum', 'collapse', 'median', 'max', 'min' or 'N'")
+        return tools.calc_metric(tmp, metric, axis=axis, key=key)
     
 
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
