@@ -10,6 +10,7 @@ from datetime import datetime
 from matplotlib.pylab import style
 from scipy.signal import find_peaks, peak_prominences
 from pyampd.ampd import find_peaks_adaptive
+from numpy.lib.stride_tricks import sliding_window_view
 
 
 def hampel(vals_orig, k=7, t0=3):
@@ -106,6 +107,40 @@ def detect_peaks(signal, adaptive_window, min_distance = 4, min_prominence = Non
         peaks = select_valid_peaks(peaks, prominence, frac_illegal, sensitivity)
     return peaks
     
+
+def fast_window(x, w, min_periods_one=True, anchor='back'):
+    """
+    Returns a sliding window view similar as pandas rolling, but based on numpy sliding_window_view
+    Args:
+        x (numpy.ndarray): input data, must be 1 dimensional
+        w (int): width of sliding window 
+        min_periods_one (bool): minimum number of observations in window required to have a value is one
+        anchor (str): Where to anchor the sliding window
+    Returns:
+        v (np.ndarray): arry containing sliding window in rows
+    """
+    v = sliding_window_view(x, w)
+    if not min_periods_one:
+        return v
+
+    min_s = np.ones((w,w))*x[:w]
+    min_s[np.triu_indices(min_s.shape[0],1)] = np.nan
+    min_e = np.ones((w,w))*x[-w:]
+    min_e[np.tril_indices(min_e.shape[0],-1)] = np.nan
+    
+    if anchor not in ['back','front','center']:
+        raise ValueError(f"anchor must be one of ['back','front','center'], but is '{anchor}'")
+    if anchor=='back':
+        min_s = min_s[:-1]
+        v=np.vstack([min_s,v])
+    if anchor=='front':
+        min_e = min_e[1:]
+        v=np.vstack([v,min_e])
+    elif anchor=='center':
+        min_s = min_s[w//2:-1]
+        min_e = min_e[1:(w//2)+1]
+        v=np.vstack([min_s,v,min_e])
+    return v
 
 
 class PickleDumpLoadMixin:
@@ -238,3 +273,6 @@ def set_token(token_dir):
 def check_token(token_dir):
     """ Check for a token, symbolizing the process has finished """
     return os.path.isfile(os.path.join(token_dir, 'done.token'))
+
+
+

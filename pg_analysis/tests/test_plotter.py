@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 
 
 
-
 class TestWormInitialization(unittest.TestCase):
     """Test Worm class initialization."""
     
