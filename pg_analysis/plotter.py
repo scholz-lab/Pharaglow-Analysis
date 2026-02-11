@@ -1,6 +1,7 @@
 import os
 import pickle
 import copy
+from typing import Any, Dict, List, Optional, Type
 import warnings
 import yaml
 import json
@@ -9,93 +10,16 @@ import numpy as np
 import pandas as pd
 import matplotlib.pylab as plt
 from scipy.stats import circmean, circstd
-from numpy.lib.stride_tricks import sliding_window_view
 from pathlib import Path
+
+from pg_analysis.loader import Loader
 
 from . import style
 from . import tools
 from .tools import PickleDumpLoadMixin
 
 
-# Default units definition for PharaGlow data columns
-UNITS = {
-    'x': 'px',
-    'y': 'px',
-    'x_scaled': 'um',
-    'y_scaled': 'um',
-    'frame': '1',
-    'time': 's',
-    'time_align': 's',
-    'time_aligned': 's',
-    'pumps': 'a.f.u.',
-    'pumps_clean': 'a.f.u.',
-    'pump_events': '1',
-    'rate': '1/s',
-    'count_rate': '1/s',
-    'count_rate_pump_events': '1/s',
-    'velocity': 'um/s',
-    'velocity_smooth': 'um/s',
-    'nose_speed': 'um/s',
-    'cms_speed': 'um/s',
-    'reversals': '1',
-    'reversals_nose': '1',
-    'inside': '1',
-    'Imean': 'a.f.u.',
-    'Imax': 'a.f.u.',
-    'Istd': 'a.f.u.',
-    'skew': '1',
-    'area': 'px^2',
-    'Area2': 'px^2',
-    'size': 'mm',
-    'Centerline': '1',
-    'centerline_scaled': 'um',
-    'Straightened': '1',
-    'temperature': 'C',
-    'humidity': '%',
-    'age': 'h',
-    '@acclimation': 'min',
-    'particle': '1',
-    'image_index': '1',
-    'im_idx': '1',
-    'has_image': '1',
-    'index': '1',
-    'space_units': 'um',
-    'time_units': 's',
-}
 
-def fast_window(x, w, min_periods_one=True, anchor='back'):
-    """
-    Returns a sliding window view similar as pandas rolling, but based on numpy sliding_window_view
-    Args:
-        x (numpy.ndarray): input data, must be 1 dimensional
-        w (int): width of sliding window 
-        min_periods_one (bool): minimum number of observations in window required to have a value is one
-        anchor (str): Where to anchor the sliding window
-    Returns:
-        v (np.ndarray): arry containing sliding window in rows
-    """
-    v = sliding_window_view(x, w)
-    if not min_periods_one:
-        return v
-
-    min_s = np.ones((w,w))*x[:w]
-    min_s[np.triu_indices(min_s.shape[0],1)] = np.nan
-    min_e = np.ones((w,w))*x[-w:]
-    min_e[np.tril_indices(min_e.shape[0],-1)] = np.nan
-    
-    if anchor not in ['back','front','center']:
-        raise ValueError(f"anchor must be one of ['back','front','center'], but is '{anchor}'")
-    if anchor=='back':
-        min_s = min_s[:-1]
-        v=np.vstack([min_s,v])
-    if anchor=='front':
-        min_e = min_e[1:]
-        v=np.vstack([v,min_e])
-    elif anchor=='center':
-        min_s = min_s[w//2:-1]
-        min_e = min_e[1:(w//2)+1]
-        v=np.vstack([min_s,v,min_e])
-    return v
 
 def _lineplot(x ,y, yerr, ax, **kwargs):
     #TODO: swap yerr and ax order and set yerr=None to not having to set yerr to None explicitly
@@ -224,90 +148,145 @@ def _heatmap(x, y, ax, **kwargs):
     return plot
 
 
-
+# region Worm
 class Worm(PickleDumpLoadMixin):
-    """class to contain data from a single timeseries result."""
-    def __init__(self, filename, columns, fps, scale, units, particle_index = None, load = True, **kwargs):
+    """
+    Container for a single worm time-series dataset.
+    """
+
+    def __init__(
+        self,
+        filename: str,
+        fps: float,
+        scale: float,
+        columns: List[str] = None,
+        particle_index: Optional[int] = None,
+        loader_cls: Type[Loader] = Loader,
+        loader_kwargs: Optional[Dict[str, Any]] = None,
+    ):
         """
-        Initialize object and load a timeseries file.
+        Initialization only stores metadata and configuration.
+        No data loading occurs here.
+
         Args:
-            filename (): path to file
-            columns (list): list of columns to load
-            fps (int): framerate of timeseries
+            filename (str): Path to timeseries file
+            columns (list): Columns to load
+            fps (float): Frame rate
             scale (float): scale of recording
-            units (): units of columns.
-            particle_index (int, None): index to assign to timeseries, if None reads index from filename, default is None.
-            load (bool): Whether to load timeseries, default is True.
-        Returns:
-            None
+            particle_index (int, optional): Override particle index
+            loader_cls (Loader, optional): loader.Loader for data reading
+            loader_kwargs (dict, optional): Passed to Loader
         """
+
+        self.filename = Path(filename)
+        self.columns = columns
         self.fps = fps
         self.scale = scale
         self.flag = False
-       
-        # keep some metadata
-        self.experiment = os.path.basename(filename)
+
+        self.loader_kwargs = loader_kwargs or {}
+        self.loader_cls = loader_cls
+
+        # Metadata
+        self.experiment = self.filename.name
+
         if particle_index is not None:
-            self.particle_index = particle_index 
+            self.particle_index = particle_index
         else:
-            self.particle_index = int(os.path.splitext(self.experiment)[0].split('_')[-1])
-        # units
-        self.columns = columns
-        self.units = units
-        # load data
-        if load:
-            print('Reading', filename)
-            self._load(filename, columns, fps, scale, **kwargs)
-            
-            
-    def _load_CA(self, filename, columns, fps, scale, **kwargs): # ER
-        #TODO: rewrite to load Macroscope Data
+            self.particle_index = self._infer_particle_index()
+
+        # Data containers (empty until load_data called)
+        self.data = None
+        self.units = {}
+
+    # ------------------------------------------------------------------
+    # Loading data
+    # ------------------------------------------------------------------
+
+    def load_data(self) -> None:
         """
-        Load data from my calcium imaging of the pharynx.
-        Args:
-            filename (): path to json file
-            columns (list): columns to load from file
-            fps (int): framerate of timeseries.
-            scale (float): scale of recording
-        Returns:
-            None
+        Load dataset using Loader and populate dataframe and units.
         """
-        with open(filename) as f:
-            tmp = json.load(f)
-        traj = pd.DataFrame(tmp)
-        # drop all columns except the ones we want - but keep the minimal values
-        traj = traj.filter(columns)
-        # extract the centerlines and other non-scalar values into an array instead
-        if 'Centerline' in columns:
-            self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
-        if 'Straightened' in columns:
-            self.images = np.array([np.array(im) for im in traj['Straightened']])
-        traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
+
+        print(f"Reading {self.filename}")
+
+        loader = Loader(
+            filepath=str(self.filename),
+            columns=self.columns,
+            strict_units=True,
+            strict_columns=True,
+            **self.loader_kwargs,
+        )
+
+        self.data = loader.get_dataframe()
+        self.units = loader.get_units()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _infer_particle_index(self) -> int:
+        """
+        Infer particle index from filename convention:
+        e.g. experiment_12.csv → 12
+        """
+        stem = self.filename.stem
+        try:
+            return int(stem.split("_")[-1])
+        except ValueError:
+            raise ValueError(
+                "Could not infer particle_index from filename. "
+                "Provide particle_index explicitly."
+            )
+            
+    # def _load_CA(self, filename, columns, fps, scale, **kwargs): # ER
+    #     #TODO: rewrite to load Macroscope Data
+    #     """
+    #     Load data from my calcium imaging of the pharynx.
+    #     Args:
+    #         filename (): path to json file
+    #         columns (list): columns to load from file
+    #         fps (int): framerate of timeseries.
+    #         scale (float): scale of recording
+    #     Returns:
+    #         None
+    #     """
+    #     with open(filename) as f:
+    #         tmp = json.load(f)
+    #     traj = pd.DataFrame(tmp)
+    #     # drop all columns except the ones we want - but keep the minimal values
+    #     traj = traj.filter(columns)
+    #     # extract the centerlines and other non-scalar values into an array instead
+    #     if 'Centerline' in columns:
+    #         self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
+    #     if 'Straightened' in columns:
+    #         self.images = np.array([np.array(im) for im in traj['Straightened']])
+    #     traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
          
         
         
-    def _load(self, filename, columns, fps, scale, **kwargs):
-        """load data.
-        Args:
-            filename (): path to file
-            columns (list): list of columns to load
-            fps (int): framerate of timeseries
-            scale (float): scale of recording
-        Returns:
-            None
-        """
-        traj = pd.read_json(filename, orient='split', **kwargs)
-        # drop all columns except the ones we want - but keep the minimal values
-        traj = traj.filter(columns)
-        # extract the centerlines and other non-scalar values into an array instead
-        if 'Centerline' in columns:
-            self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
-        if 'Straightened' in columns:
-            self.images = np.array([np.array(im) for im in traj['Straightened']])
-        traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
+    # def _load(self, filename, columns, fps, scale, **kwargs):
+    #     """load data.
+    #     Args:
+    #         filename (): path to file
+    #         columns (list): list of columns to load
+    #         fps (int): framerate of timeseries
+    #         scale (float): scale of recording
+    #     Returns:
+    #         None
+    #     """
+    #     traj = pd.read_json(filename, orient='split', **kwargs)
+    #     # drop all columns except the ones we want - but keep the minimal values
+    #     traj = traj.filter(columns)
+    #     # extract the centerlines and other non-scalar values into an array instead
+    #     if 'Centerline' in columns:
+    #         self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
+    #     if 'Straightened' in columns:
+    #         self.images = np.array([np.array(im) for im in traj['Straightened']])
+    #     traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
        
-        self.data = traj
-        self.data = self.data.reset_index()
+    #     self.data = traj
+    #     self.data = self.data.reset_index()
 
     def __repr__(self):
         return f"Worm \n with underlying data: {self.data.describe()}"
@@ -517,20 +496,23 @@ class Worm(PickleDumpLoadMixin):
             None
         """
 
-        funcs = {"reversals": self.calculate_reversals,
+        funcs = {"velocity":self.calculate_velocity,
+                 "time":self.calculate_time,
+                 "preprocess_signal": self.preprocess_signal,
+                 "locations": self.calculate_locations,
+                "reversals": self.calculate_reversals,
                  "count_rate": self.calculate_count_rate,
                  "smoothed": self.calculate_smoothed,
                  "pumps": self.calculate_pumps,
                  "nose_speed": self.calculate_nose_speed,
                  "reversals_nose": self.calculate_reversals_nose,
-                 "velocity":self.calculate_velocity,
-                 "time":self.calculate_time,
-                 "preprocess_signal": self.preprocess_signal,
-                 "locations": self.calculate_locations,
+                 
                 }
         if name == 'help':
             print(funcs.keys())
             return
+        if isinstance(name, int):
+            name = list(funcs.keys())[name] 
         # run function
         funcs[name](**kwargs)
         # update columns
@@ -654,7 +636,7 @@ class Worm(PickleDumpLoadMixin):
         self.units[f'count_rate_{key}'] = f"{self.units[key]}/{self.units['time']}"
 
 
-    def calculate_reversals(self, animal_size, angle_threshold, scale = None):
+    def calculate_reversals(self, animal_size=100, angle_threshold=150, scale = None):
         """
         Adaptation of the Hardaker's method to detect reversal event. 
         A single worm's centroid trajectory is re-sampled with a distance interval equivalent to 1/10 
@@ -750,7 +732,7 @@ class Worm(PickleDumpLoadMixin):
         angle = np.rad2deg(np.arccos(dotProduct))
 
         # smooth angle with fast_window to increase speed
-        angle = circmean(fast_window(angle, w_smooth, anchor='center'), 180, 0, axis=1, nan_policy='omit')
+        angle = circmean(tools.fast_window(angle, w_smooth, anchor='center'), 180, 0, axis=1, nan_policy='omit')
         angle[np.isnan(angle)] = 0
         angle = np.append(angle, [np.nan]*dt)
         self.add_column('angle_nose', angle, overwrite = True)
@@ -867,12 +849,24 @@ class Worm(PickleDumpLoadMixin):
 class Experiment(PickleDumpLoadMixin):
     """Wrapper class which is a container for individual worms."""
     # class attributes
-    def __init__(self, strain, condition, scale, fps, scale_units = None, fps_units = None, samples = None, color = None):
+    def __init__(
+        self,
+        strain: str,
+        condition: str,
+        fps: float,
+        scale: float,
+        scale_units: str = None,
+        fps_units: str = None,
+        samples: Optional[List] = None,
+        color: Optional[str] = None,
+        loader_cls: Type[Loader] = Loader,
+        loader_kwargs: Optional[Dict[str, Any]] = None,
+        ):
         """
         Initialize Experiment object with data and metadata.
         Args:
             strain (str): strain name, required metadata
-            condition (list): condition of experiment, required metadata
+            condition (str): condition of experiment
             scale (float): scale of recording, required metadata
             fps (int): framerate of timeseries, required metadata
             scale_units (str): units of scale, if None assumes 'um', default is None
@@ -888,6 +882,8 @@ class Experiment(PickleDumpLoadMixin):
         self.fps = fps
         # a place for detection parameters, ...
         self.metadata = {}
+        self.units = {}
+
         if samples == None:
             self.samples = []
         else:
@@ -902,6 +898,12 @@ class Experiment(PickleDumpLoadMixin):
             self.time_units = 's'
         else:
             self.time_units =  fps_units
+                # add the units for scale and fps
+        self.units['space_units'] = self.space_units
+        self.units['time_units'] = self.time_units
+        # data loader information
+        self.loader_cls = loader_cls
+        self.loader_kwargs = loader_kwargs or {}
 
             
     def __repr__(self):
@@ -951,15 +953,17 @@ class Experiment(PickleDumpLoadMixin):
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = None, append = True, nmax = None, filterword = "", units = None, **kwargs):
+    def load_data(self, path, columns = None, append = True, nmax = None, filterword = "", extension = '.json',  **kwargs):
+        #TODO: change to PATHLIB
         """
         Load all results files from a folder. 
         Args:
-            path (): location of pharaglow results files
+            path (): location of timeseries files
             columns (list[str]): required columns for analysis.
             append (bool): append to existing samples. If False, start with an empty experiment.
             nmax (int, optional): maximum number of samples to load
             filterword (str, optional): string to load only files containing filterword
+            extension (str, optional): specify what type of file to load
             units (dict, optional): units of columns in loaded files
         Returns:
             None
@@ -968,57 +972,22 @@ class Experiment(PickleDumpLoadMixin):
         user_specified_columns = columns is not None
         
         if columns is None:
-             columns = ['x', 'y', 'frame'] 
-        
-        # Warn if using only minimal columns 
-        if set(columns) <= {'x', 'y', 'frame'}:
-            warnings.warn(
-                f"Using minimal column set {sorted(columns)}. "
-                "Consider adding additional columns for full analysis.",
-                UserWarning
-            )
-            
-        # unit definitions
-        if units is None:
-            # Use the default UNITS dictionary
-            self.units = UNITS.copy()
-            # Warn if user specified columns but not units
-            if user_specified_columns:
-                warnings.warn(
-                    "Columns were specified without explicit units. "
-                    "Using default units from UNITS dictionary. "
-                    "To suppress this warning, provide units as a dict or YAML file path.",
-                    UserWarning
-                )
-        elif isinstance(units, str) or isinstance(units, Path):
-            with open(units) as stream:
-                try:
-                    self.units = yaml.safe_load(stream)
-                except yaml.YAMLError as exc:
-                    print(exc)
-        elif isinstance(units, dict):
-            self.units = units
-        else:
-            raise RuntimeError('units must be None, a dict, or a path to a YAML config file!')
-        # check if we have units for all columns
-        if not set(columns)<=set(self.units):
-            raise IndexError(f"Units are not specified for all columns {set(self.units)}.")
-        # add the units for scale and fps
-        self.units['space_units'] = self.space_units
-        self.units['time_units'] = self.time_units
-        
+             columns = ['x', 'y', 'frame', 'pumps']
         # load stuff
         if nmax == None:
             nmax = np.inf
         if not append:
             self.samples = []
         j = 0
-        for fn in os.listdir(path):
-            file = os.path.join(path,fn)
+
+        path = Path(path)
+        for f in path.glob('*'):
             if j >= nmax:
                 break
-            if os.path.isfile(file) and filterword in fn and fn.endswith('.json'):
-                self.samples.append(Worm(file, columns, self.fps, self.scale, self.units, **kwargs))
+            if f.is_file() and filterword in f.stem and extension == f.suffix:
+                w = Worm(f, self.fps, self.scale, columns, loader_cls=self.loader_cls, **self.loader_kwargs)
+                w.load_data()
+                self.samples.append(w)
                 j += 1
     
     
