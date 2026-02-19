@@ -275,7 +275,7 @@ def check_token(token_dir):
     """ Check for a token, symbolizing the process has finished """
     return os.path.isfile(os.path.join(token_dir, 'done.token'))
 
-def calc_metric(tmp, metric, axis=0, key=None):
+def calc_metric(tmp, metric, axis=None, key=None):
     """Calls metric calculation on pandas Dataframe or Series"""
     kwargs = {}
     if axis is not None:

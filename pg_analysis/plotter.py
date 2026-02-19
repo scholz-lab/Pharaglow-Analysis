@@ -159,6 +159,8 @@ class Worm(PickleDumpLoadMixin):
         filename: str,
         fps: float,
         scale: float,
+        scale_units: Optional[str] = 'um',
+        fps_units: Optional[str] = 's',
         columns: List[str] = None,
         particle_index: Optional[int] = None,
         loader_cls: Type[Loader] = Loader,
@@ -173,6 +175,8 @@ class Worm(PickleDumpLoadMixin):
             columns (list): Columns to load
             fps (float): Frame rate
             scale (float): scale of recording
+            scale_units (str): the units of the space sampling given in scale e.g. um/px
+            fps_units (str): the units of the time sampling given in fps e.g. frames/second or samples/min
             particle_index (int, optional): Override particle index
             loader_cls (Loader, optional): loader.Loader for data reading
             loader_kwargs (dict, optional): Passed to Loader
@@ -182,6 +186,7 @@ class Worm(PickleDumpLoadMixin):
         self.columns = columns
         self.fps = fps
         self.scale = scale
+        
         self.flag = False
 
         self.loader_kwargs = loader_kwargs or {}
@@ -197,8 +202,10 @@ class Worm(PickleDumpLoadMixin):
 
         # Data containers (empty until load_data called)
         self.data = None
-        self.units = {}
-
+        
+        self.units = {'time_units': fps_units,
+                      'space_units': scale_units}
+    
     # ------------------------------------------------------------------
     # Loading data
     # ------------------------------------------------------------------
@@ -219,7 +226,9 @@ class Worm(PickleDumpLoadMixin):
         )
 
         self.data = loader.get_dataframe()
-        self.units = loader.get_units()
+        self.units = loader.get_units() | self.units
+        self.centerline = loader.centerline
+        self.images = loader.images
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -324,7 +333,7 @@ class Worm(PickleDumpLoadMixin):
         if filterfunction is not None:
             filtercondition = filterfunction(tmp)
             tmp = tmp.loc[filtercondition]
-        return tools.calc_metric(tmp, metric, axis=0, key=key)
+        return tools.calc_metric(tmp, metric, key=key)
             
     
     def get_aligned_metric(self, key, metric, filterfunction = None):
@@ -845,7 +854,8 @@ class Worm(PickleDumpLoadMixin):
             tmp = self.align(timepoint,  tau_before, tau_after, key, column_align)
             self.aligned_data.append(tmp)
 
-    
+   
+# region Experiment 
 class Experiment(PickleDumpLoadMixin):
     """Wrapper class which is a container for individual worms."""
     # class attributes
@@ -855,8 +865,8 @@ class Experiment(PickleDumpLoadMixin):
         condition: str,
         fps: float,
         scale: float,
-        scale_units: str = None,
-        fps_units: str = None,
+        scale_units: Optional[str] = 'um',
+        fps_units: Optional[str] = 's',
         samples: Optional[List] = None,
         color: Optional[str] = None,
         loader_cls: Type[Loader] = Loader,
@@ -889,18 +899,18 @@ class Experiment(PickleDumpLoadMixin):
         else:
             self.samples = samples[:]
         self.color = color
-        # units
-        if scale_units is None:
-            self.space_units = 'um'
-        else:
-            self.space_units = scale_units
-        if fps_units is None:
-            self.time_units = 's'
-        else:
-            self.time_units =  fps_units
+        # # units
+        # if scale_units is None:
+        #     self.space_units = 'um'
+        # else:
+        #     self.space_units = scale_units
+        # if fps_units is None:
+        #     self.time_units = 's'
+        # else:
+        #     self.time_units =  fps_units
                 # add the units for scale and fps
-        self.units['space_units'] = self.space_units
-        self.units['time_units'] = self.time_units
+        self.units['space_units'] = scale_units
+        self.units['time_units'] = fps_units
         # data loader information
         self.loader_cls = loader_cls
         self.loader_kwargs = loader_kwargs or {}

@@ -4,7 +4,7 @@ import numpy as np
 import tempfile
 import os
 from pathlib import Path
-from pg_analysis.plotter import Worm, UNITS, _lineplot, _hist, _scatter, _heatmap
+from pg_analysis.plotter import Worm, _lineplot, _hist, _scatter, _heatmap
 
 import matplotlib.pyplot as plt
 
@@ -32,14 +32,13 @@ class TestWormInitialization(unittest.TestCase):
     
     def test_worm_initialization_without_load(self):
         """Test Worm initialization without loading data."""
-        worm = Worm(
-            filename='test_0.json',
-            columns=['frame', 'x', 'y'],
+        worm = Worm(filename='test_0.json',
             fps=10,
             scale=1.0,
-            units=UNITS,
-            load=False
+            columns=['frame', 'x', 'y'],
+            loader_cls = None
         )
+        
         self.assertEqual(worm.fps, 10)
         self.assertEqual(worm.scale, 1.0)
         self.assertEqual(worm.particle_index, 0)
@@ -50,14 +49,13 @@ class TestWormGetMetric(unittest.TestCase):
     
     def setUp(self):
         """Create a Worm instance with sample data."""
-        self.worm = Worm(
-            filename='test_0.json',
-            columns=['frame', 'x', 'y', 'pumps'],
+        self.worm = Worm(filename='test_0.json',
             fps=10,
             scale=1.0,
-            units=UNITS,
-            load=False
+            columns=['frame', 'x', 'y', 'pumps'],
+            loader_cls = None
         )
+        self.units = dict.fromkeys(self.worm.columns, 'a.u')
         self.worm.data = pd.DataFrame({
             'frame': [0, 1, 2, 3, 4],
             'x': [10.0, 11.0, 12.0, 13.0, 14.0],
@@ -96,19 +94,18 @@ class TestWormAddColumn(unittest.TestCase):
     
     def setUp(self):
         """Create a Worm instance with sample data."""
-        self.worm = Worm(
-            filename='test_0.json',
-            columns=['frame', 'x', 'y'],
+        self.worm = Worm(filename='test_0.json',
             fps=10,
             scale=1.0,
-            units=UNITS,
-            load=False
+            columns=['frame', 'x', 'y'],
+            loader_cls = None
         )
         self.worm.data = pd.DataFrame({
             'frame': [0, 1, 2, 3, 4],
             'x': [10.0, 11.0, 12.0, 13.0, 14.0],
             'y': [20.0, 21.0, 22.0, 23.0, 24.0]
         })
+        self.units = dict.fromkeys(self.worm.columns, 'a.u')
     
     def test_add_column_new(self):
         """Test adding a new column."""
@@ -128,19 +125,18 @@ class TestWormGetData(unittest.TestCase):
     
     def setUp(self):
         """Create a Worm instance with sample data."""
-        self.worm = Worm(
-            filename='test_0.json',
-            columns=['frame', 'x', 'y'],
+        self.worm = Worm(filename='test_0.json',
             fps=10,
             scale=1.0,
-            units=UNITS,
-            load=False
+            columns=['frame', 'x', 'y'],
+            loader_cls = None
         )
         self.worm.data = pd.DataFrame({
             'frame': [0, 1, 2, 3, 4],
             'x': [10.0, 11.0, 12.0, 13.0, 14.0],
             'y': [20.0, 21.0, 22.0, 23.0, 24.0]
         })
+        self.units = dict.fromkeys(self.worm.columns, 'a.u')
     
     def test_get_data_all(self):
         """Test getting all data."""
@@ -188,13 +184,11 @@ class TestCalculateProperties(unittest.TestCase):
     
     def setUp(self):
         """Create a Worm instance with sample data."""
-        self.worm = Worm(
-            filename='test_0.json',
-            columns=['frame', 'x', 'y'],
+        self.worm = Worm(filename='test_0.json',
             fps=10,
             scale=1.0,
-            units=UNITS,
-            load=False
+            columns=['frame', 'x', 'y','pumps'],
+            loader_cls = None
         )
         self.worm.data = pd.DataFrame({
             'frame': [0, 1, 2, 3, 4],
@@ -202,6 +196,7 @@ class TestCalculateProperties(unittest.TestCase):
             'y': [20.0, 21.0, 22.0, 23.0, 24.0],
             'pumps': [0, 1, 0, 1, 0]
         })
+        self.worm.units = self.worm.units | dict.fromkeys(self.worm.columns, 'a.u')
     
     def test_calculate_properties(self):
         """Test calculating properties."""
@@ -213,6 +208,53 @@ class TestCalculateProperties(unittest.TestCase):
         self.assertIn('x_smoothed', self.worm.data.columns)
         self.assertIn('count_rate_pumps', self.worm.data.columns)
         self.assertIn('reversals', self.worm.data.columns)
+
+class TestWormGetAlignedMetric(unittest.TestCase):
+    """Test Worm.get_aligned_metric method."""
+    
+    def setUp(self):
+        """Create a Worm instance with sample data."""
+        self.worm = Worm(filename='test_0.json',
+            fps=10,
+            scale=1.0,
+            columns=['frame', 'x', 'y', 'pumps'],
+            loader_cls = None
+        )
+        self.units = dict.fromkeys(self.worm.columns, 'a.u')
+        self.worm.data = pd.DataFrame({
+            'frame': [0, 1, 2, 3, 4],
+            'x': [10.0, 11.0, 12.0, 13.0, 14.0],
+            'y': [20.0, 21.0, 22.0, 23.0, 24.0],
+            'pumps': [0, 1, 0, 1, 0]
+        })
+        self.tp = [0]
+        self.worm.multi_align(self.tp, tau_before=1, tau_after =3)
+
+    
+    def test_get_metric_mean(self):
+        """Test getting mean metric."""
+        data = self.worm.get_aligned_metric('pumps', 'mean')
+        
+    
+    def test_get_metric_sum(self):
+        """Test getting sum metric."""
+        data = self.worm.get_aligned_metric('pumps', 'sum')
+        
+    
+    def test_get_metric_count(self):
+        """Test getting count metric."""
+        data = self.worm.get_aligned_metric('pumps', 'N')
+        
+    
+    def test_get_metric_invalid_key(self):
+        """Test get_metric with invalid key."""
+        with self.assertRaises(AssertionError):
+            self.worm.get_aligned_metric('nonexistent', 'mean')
+    
+    def test_get_metric_invalid_metric(self):
+        """Test get_metric with invalid metric."""
+        with self.assertRaises(Exception):
+            self.worm.get_aligned_metric('pumps', 'invalid_metric')
 
 
 if __name__ == '__main__':

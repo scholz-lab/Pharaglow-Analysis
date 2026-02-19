@@ -179,6 +179,12 @@ class Loader:
 
     def get_units(self) -> Dict[str, str]:
         return self.units
+    
+    def get_centerline(self) -> np.array:
+        return self.centerline
+    
+    def get_images(self) -> np.array:
+        return self.images
 
     def __repr__(self) -> str:
         return (
@@ -186,3 +192,59 @@ class Loader:
             f"columns={list(self.df.columns)}, "
             f"strict_units={len(self.units) == len(self.df.columns)})"
         )
+
+
+class MacroscopeRawStageLoader(Loader):
+    """
+    Loader subclass for Macroscope stage files. This assumes the structure from GlowTracker output.
+    - skips header rows
+    - fixes misaligned columns
+    - renames columns
+    - resets time to zero
+    """
+    def _load_file(self, 
+                   columns: Optional[List[str]],
+                strict_columns: bool,**kwargs) -> pd.DataFrame:
+        """
+        Overrides Loader._load_file to handle Macroscope stage CSVs.
+        """
+        fname = str(self.filepath)
+
+        # --- Load raw stage data ---
+        df = pd.read_csv(
+            fname,
+            skiprows=27,
+            sep=' ',
+            index_col=False,
+            comment=None,
+            **kwargs
+        )
+
+        # Shift columns: comment recognized as first column
+        cols = df.columns[1:]
+        df = df.iloc[:, :-1]
+        df.columns = cols
+
+        # Keep only requested columns
+        #usecols = ['Frame', 'Time', 'X', 'Y']
+
+        # Rename columns to standard format
+        df = df.rename(columns={
+            'Frame': 'frame',
+            'Time': 'time',
+            'X': 'x',
+            'Y': 'y',
+        })
+
+        # Reset time to start at zero -- macroscope uses system time
+        df['time'] = df['time'] - df['time'].iloc[0]
+
+        # Optional: apply column selection from Loader
+        if columns is not None:
+            missing = [c for c in columns if c not in df.columns]
+            if missing and self.strict_columns:
+                raise ValueError(f"Requested columns not found: {missing}")
+            df = df[[c for c in columns if c in df.columns]]
+
+
+        return df
