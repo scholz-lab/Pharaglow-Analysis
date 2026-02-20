@@ -217,7 +217,7 @@ class Worm(PickleDumpLoadMixin):
 
         print(f"Reading {self.filename}")
 
-        loader = Loader(
+        loader = self.loader_cls(
             filepath=str(self.filename),
             columns=self.columns,
             strict_units=True,
