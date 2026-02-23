@@ -248,3 +248,63 @@ class MacroscopeRawStageLoader(Loader):
 
 
         return df
+    
+    
+    
+class MacroscopeLoader(Loader):
+    """
+    Loader subclass for files created by MacroscopeDataAnalysis, the signals and centerlines.
+    """
+    UNITS: Dict[str, str] = {
+        "frame":1,
+        "Time": 'us',
+        "x": 'um',
+        "y":'um',
+        "z":'um',
+        "minBrightness":'a.f.u',
+        "maxBrightness":'a.f.u',
+        "meanBrightness":'a.f.u',
+        "medianBrightness":'a.f.u',
+        "skewness":'a.f.u',
+        "percentile_5":'a.f.u',
+        "percentile_95":'a.f.u',
+        "Xstage": 'um',
+        "Ystage": 'um',
+        "Xworm":'um',
+        "Yworm":'um',
+        "signal_max": 'a.f.u',
+        "signal_mean": 'a.f.u',
+        "cms_y":'um',
+        "cms_x":'um',
+        "skew":'a.f.u',
+        "time":'s',
+        'space_units': 'um',
+        'time_units': 's',
+        
+    }
+    def _load_file(self, 
+                   columns: Optional[List[str]],
+                   
+                strict_columns: bool,**kwargs) -> pd.DataFrame:
+        """
+        Overrides Loader._load_file to handle Macroscope stage CSVs.
+        """
+        fname = str(self.filepath)
+
+        # --- Load raw stage data ---
+        df = pd.read_json(fname, orient='split')
+         # Optional: apply column selection from Loader
+        if columns is not None:
+            missing = [c for c in columns if c not in df.columns]
+            if missing and self.strict_columns:
+                raise ValueError(f"Requested columns not found: {missing}")
+            df = df[[c for c in columns if c in df.columns]]
+
+        # ---- find associated centerline file. This assumes namimg convention as in macroscope_data analysis
+        try:
+            fname_cl = Path(fname).parent/(Path(fname).stem.split('_')[0]+'_um_centerlines.csv')
+            self.centerline = np.loadtxt(fname_cl, delimiter = ',').reshape(-1,100,2)
+        except FileNotFoundError:
+            warnings.warn(f'No centerline file found at {fname_cl}')
+       
+        return df

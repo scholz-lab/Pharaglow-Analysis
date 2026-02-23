@@ -195,10 +195,10 @@ class Worm(PickleDumpLoadMixin):
         # Metadata
         self.experiment = self.filename.name
 
-        if particle_index is not None:
-            self.particle_index = particle_index
-        else:
-            self.particle_index = self._infer_particle_index()
+        try:
+            self.particle_index = particle_index or self._infer_particle_index()
+        except ValueError:
+            self.particle_index = 0
 
         # Data containers (empty until load_data called)
         self.data = None
@@ -220,8 +220,7 @@ class Worm(PickleDumpLoadMixin):
         loader = self.loader_cls(
             filepath=str(self.filename),
             columns=self.columns,
-            strict_units=True,
-            strict_columns=True,
+            
             **self.loader_kwargs,
         )
 
@@ -248,57 +247,12 @@ class Worm(PickleDumpLoadMixin):
                 "Provide particle_index explicitly."
             )
             
-    # def _load_CA(self, filename, columns, fps, scale, **kwargs): # ER
-    #     #TODO: rewrite to load Macroscope Data
-    #     """
-    #     Load data from my calcium imaging of the pharynx.
-    #     Args:
-    #         filename (): path to json file
-    #         columns (list): columns to load from file
-    #         fps (int): framerate of timeseries.
-    #         scale (float): scale of recording
-    #     Returns:
-    #         None
-    #     """
-    #     with open(filename) as f:
-    #         tmp = json.load(f)
-    #     traj = pd.DataFrame(tmp)
-    #     # drop all columns except the ones we want - but keep the minimal values
-    #     traj = traj.filter(columns)
-    #     # extract the centerlines and other non-scalar values into an array instead
-    #     if 'Centerline' in columns:
-    #         self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
-    #     if 'Straightened' in columns:
-    #         self.images = np.array([np.array(im) for im in traj['Straightened']])
-    #     traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
-         
-        
-        
-    # def _load(self, filename, columns, fps, scale, **kwargs):
-    #     """load data.
-    #     Args:
-    #         filename (): path to file
-    #         columns (list): list of columns to load
-    #         fps (int): framerate of timeseries
-    #         scale (float): scale of recording
-    #     Returns:
-    #         None
-    #     """
-    #     traj = pd.read_json(filename, orient='split', **kwargs)
-    #     # drop all columns except the ones we want - but keep the minimal values
-    #     traj = traj.filter(columns)
-    #     # extract the centerlines and other non-scalar values into an array instead
-    #     if 'Centerline' in columns:
-    #         self.centerline = np.array([np.array(cl) for cl in traj['Centerline']])
-    #     if 'Straightened' in columns:
-    #         self.images = np.array([np.array(im) for im in traj['Straightened']])
-    #     traj = traj.drop(['Centerline', 'Straightened'], errors = 'ignore')
-       
-    #     self.data = traj
-    #     self.data = self.data.reset_index()
 
     def __repr__(self):
-        return f"Worm \n with underlying data: {self.data.describe()}"
+        if self.data is not None:
+            return f"Worm \n with underlying data: {self.data.describe()}"
+        else:
+            return f"Worm \n without data. Load some data using self.load_data()."
 
 
     def __len__(self):
@@ -440,7 +394,7 @@ class Worm(PickleDumpLoadMixin):
                 return self.data[unit][self.data[events]==True].values
 
 
-    def add_column(self, key, values, overwrite = True):
+    def add_column(self, key, values, unit = 1, overwrite = True):
         """
         Add a data column to the underlying datset. Will overwrite existing column names if overwrite.
         Args:
@@ -455,6 +409,7 @@ class Worm(PickleDumpLoadMixin):
         else:
             if len(values) == len(self.data.index):
                 self.data[key] = values
+                self.units[key] = unit
             else:
                 warnings.warn(f'Length of values {len(values)} does not match size of the data {len(self.data.index)}. Column was not updated.')
     
@@ -899,16 +854,7 @@ class Experiment(PickleDumpLoadMixin):
         else:
             self.samples = samples[:]
         self.color = color
-        # # units
-        # if scale_units is None:
-        #     self.space_units = 'um'
-        # else:
-        #     self.space_units = scale_units
-        # if fps_units is None:
-        #     self.time_units = 's'
-        # else:
-        #     self.time_units =  fps_units
-                # add the units for scale and fps
+        # add the units for scale and fps
         self.units['space_units'] = scale_units
         self.units['time_units'] = fps_units
         # data loader information
@@ -958,13 +904,21 @@ class Experiment(PickleDumpLoadMixin):
             return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample].copy())
         else:
             raise TypeError("Invalid argument type.")
+    
+    def update_particle_index(self):
+        """Update the particle index"""
+        for w_idx, w in enumerate(self.samples):
+                w.particle_index = w_idx
+                
+    def synchronize_units(self):
+        if len(self.samples)>0:
+            self.units = self.units | self.samples[0].units
     ######################################
     #
     #  Data loading
     #
     #######################################
-    def load_data(self, path, columns = None, append = True, nmax = None, filterword = "", extension = '.json',  **kwargs):
-        #TODO: change to PATHLIB
+    def load_data(self, path, columns = None, append = True, nmax = None, filterword = "*", extension = '.json',  **kwargs):
         """
         Load all results files from a folder. 
         Args:
@@ -991,15 +945,19 @@ class Experiment(PickleDumpLoadMixin):
         j = 0
 
         path = Path(path)
-        for f in path.glob('*'):
+        for f in path.glob(filterword):
             if j >= nmax:
                 break
-            if f.is_file() and filterword in f.stem and extension == f.suffix:
-                w = Worm(f, self.fps, self.scale, columns, loader_cls=self.loader_cls, **self.loader_kwargs)
+            if f.is_file() and extension == f.suffix:
+                w = Worm(f, fps = self.fps, scale = self.scale, columns = columns, loader_cls=self.loader_cls, loader_kwargs = self.loader_kwargs)
                 w.load_data()
                 self.samples.append(w)
                 j += 1
-    
+        # clean up the particle index and synchronize the units
+        self.synchronize_units()
+        if np.sum([w.particle_index for w in self.samples])==0:
+            warnings.warn('Particle index could not be extracted. Using consecutive numbers.')
+            self.update_particle_index()
     
     
     def save_wcon(self, filepath, columns = None, tag = '@INF'):
@@ -1118,7 +1076,7 @@ class Experiment(PickleDumpLoadMixin):
         self.stimulus = np.loadtxt(filename)
     
     
-    def add_column(self, key, values, overwrite = True):
+    def add_column(self, key, values, unit = 1, overwrite = True):
         """
         Add a column of data to each worm, using :func:Worm.add_column
         Args:
@@ -1131,6 +1089,7 @@ class Experiment(PickleDumpLoadMixin):
         assert len(values) == len(self.samples), f'Number of values provided {len(values)} does not match the number of samples in the experiment {len(self.samples)}.'
         for n, worm in enumerate(self.samples):
             worm.add_column(key, values[n], overwrite)
+            worm.units[key] = unit
 
 
     def align_data(self, timepoints, tau_before, tau_after, key = None, column_align = 'frame'):
