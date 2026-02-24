@@ -202,6 +202,22 @@ class MacroscopeRawStageLoader(Loader):
     - renames columns
     - resets time to zero
     """
+    UNITS: Dict[str, str] = {
+        "frame":1,
+        "Time": 'us',
+        "x": 'mm',
+        "y":'mm',
+        "z":'mm',
+        "minBrightness":'a.f.u',
+        "maxBrightness":'a.f.u',
+        "meanBrightness":'a.f.u',
+        "medianBrightness":'a.f.u',
+        "skewness":'a.f.u',
+        "percentile_5":'a.f.u',
+        "percentile_95":'a.f.u',
+        "time_units":'s',
+        "space_units":'um'
+    }
     def _load_file(self, 
                    columns: Optional[List[str]],
                 strict_columns: bool,**kwargs) -> pd.DataFrame:
