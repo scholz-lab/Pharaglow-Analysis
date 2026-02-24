@@ -42,25 +42,25 @@ def _lineplot(x ,y, yerr , ax, **kwargs):
             yi = y.iloc[:,wi]
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
-            
+            alpha_error = kwargs.pop('alpha_error', 0.5)
             plot.append(ax[(wi)%len(ax)].plot(xi.values, yi.values, **kwargs))
             if yerr is not None:
                 yerr_i = yerr.iloc[:,wi]
-                alpha_eror = kwargs.pop('alpha_error', 0.5)
+                
                 # ensure errorbar color matched plot lines
                 kwargs.pop('color')
+                kwargs['alpha'] = alpha_error
                 color = plot[-1].get_color()
-                ax[(wi)%len(ax)].fill_between(xi.values, yi.values-yerr_i.values, yi.values+yerr_i.values,color = color,  alpha = alpha_error, **kwargs)
+                ax[(wi)%len(ax)].fill_between(xi.values, yi.values-yerr_i.values, yi.values+yerr_i.values, color = color,   **kwargs)
     else:
-        
+        alpha_error = kwargs.pop('alpha_error', 0.5)
         plot = ax.plot(x.values, y.values, **kwargs)
         if yerr is not None:
-            alpha_error = kwargs.pop('alpha_error', 0.5)
+           
             kwargs.pop('color')
-            print(plot)
+            kwargs['alpha'] = alpha_error
             color = plot[-1].get_color()
-            #print(color)
-            ax.fill_between(x.values, y.values-yerr.values, y.values+yerr.values, alpha = alpha_error, lw=0, color = color, **kwargs)
+            ax.fill_between(x.values, y.values-yerr.values, y.values+yerr.values,  lw=0, color = color, **kwargs)
     return plot
 
 
@@ -541,11 +541,10 @@ class Worm(PickleDumpLoadMixin):
         self.data.loc[:,'y_scaled'] = self.data['y']*self.scale
         self.units['x_scaled'] = self.units['space_units']
         self.units['y_scaled'] = self.units['space_units']
-        try:
+        if self.centerline is not None:
             self.centerline_scaled = self.centerline*self.scale
             self.units['centerline_scaled'] = self.units['space_units']
-        except AttributeError:
-            pass
+       
             
         
     def calculate_velocity(self, units=None, dt = 1, columns = ['x', 'y']):
@@ -1014,6 +1013,8 @@ class Experiment(PickleDumpLoadMixin):
         except KeyError:
             print('Please define the experimental metadata first by providing a dictionary to self.define_metadata.')
         
+        # get the time
+        self.calculate_property('time')
         # get the scaled coordinates
         self.calculate_property('locations')
         # update units
@@ -1413,3 +1414,32 @@ class Experiment(PickleDumpLoadMixin):
         else:
              raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
         return plot, x, y
+
+    
+   
+    def categorical_plot(self, ax, key, category, metric = 'mean', **kwargs):
+        """
+        Plot the data in a boxplot as grouped by a categorical variable
+        
+        Args:
+            ax (matplotlib.pyplot.axes or list): either matplotlib axis object or list of axes
+            key (str ): column of data in the Worm object. 
+            category (str ): column of data in the Worm object that contains categorical data 
+            metric (None or str or list of str): metric to apply to the data in each category
+            axis (int): axis = 1 plots the sample-averaged timeseries of the data, axis = 0 plots the time-averaged metric of each sample in the data.
+        Returns
+            tuple containing
+                - plot
+                - x (Series): data on x-axis
+                - y (Series): data on y-axis
+        """
+        categorical_data = self.get_sample_metric_categorical(key = key, category=category, metric=metric)
+        # generate x locations for a box plot from the number of categories
+        x_data = range(len(categorical_data))
+        color = kwargs.pop('color', self.color)
+        clrs = [color]*len(x_data)
+        lbls = lbls=[f"{categorical_data.index.name}={categorical_data.index[i]}" for i in range(len(categorical_data))]
+        plot = style.scatterBoxplot(ax = ax, x_data = x_data, y_data= categorical_data.values,  clrs=[None, None], lbls = lbls, **kwargs)
+        return plot, x_data, categorical_data
+                       
+                       
