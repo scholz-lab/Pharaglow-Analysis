@@ -21,7 +21,7 @@ from .tools import PickleDumpLoadMixin
 
 
 
-def _lineplot(x ,y, yerr, ax, **kwargs):
+def _lineplot(x ,y, yerr , ax, **kwargs):
     #TODO: swap yerr and ax order and set yerr=None to not having to set yerr to None explicitly
     """
     Plots line plot from x and y, with a error.
@@ -42,16 +42,25 @@ def _lineplot(x ,y, yerr, ax, **kwargs):
             yi = y.iloc[:,wi]
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
+            
             plot.append(ax[(wi)%len(ax)].plot(xi.values, yi.values, **kwargs))
             if yerr is not None:
                 yerr_i = yerr.iloc[:,wi]
-                alpha = kwargs.pop('alpha', 0.5)
-                ax[(wi)%len(ax)].fill_between(xi.values, yi.values-yerr_i.values, yi.values+yerr_i.values, alpha = alpha, **kwargs)
+                alpha_eror = kwargs.pop('alpha_error', 0.5)
+                # ensure errorbar color matched plot lines
+                kwargs.pop('color')
+                color = plot[-1].get_color()
+                ax[(wi)%len(ax)].fill_between(xi.values, yi.values-yerr_i.values, yi.values+yerr_i.values,color = color,  alpha = alpha_error, **kwargs)
     else:
+        
         plot = ax.plot(x.values, y.values, **kwargs)
         if yerr is not None:
-            alpha = kwargs.pop('alpha', 0.5)
-            ax.fill_between(x.values, y.values-yerr.values, y.values+yerr.values, alpha = alpha, lw=0,  **kwargs)
+            alpha_error = kwargs.pop('alpha_error', 0.5)
+            kwargs.pop('color')
+            print(plot)
+            color = plot[-1].get_color()
+            #print(color)
+            ax.fill_between(x.values, y.values-yerr.values, y.values+yerr.values, alpha = alpha_error, lw=0, color = color, **kwargs)
     return plot
 
 
@@ -146,6 +155,18 @@ def _heatmap(x, y, ax, **kwargs):
         im = ax.imshow(y.values.T, **kwargs)
         plot.append(im)
     return plot
+
+
+def _centerline_plot(ax, XY, CLine,  events = None, events_kwargs={}, **kwargs):
+    """With x,y track coordinates and a centerline array, plot the centerline along the tracks."""
+    adjustCL = (CLine-np.nanmean(CLine))+np.repeat(XY.reshape(XY.shape[0],1,XY.shape[1]), CLine.shape[1], axis=1)# fits better than subtracting 50
+    color = kwargs.pop('color', None)
+    ax.plot(*adjustCL.T, c = color, alpha = 0.1, **kwargs);
+    #events = w.data['stimulus']
+    if events is not None:
+        ax.scatter(*XY[events>0].T, **events_kwargs)
+    ax.set_aspect(1)
+    return ax
 
 
 # region Worm
@@ -808,6 +829,15 @@ class Worm(PickleDumpLoadMixin):
         for timepoint in self.timepoints:
             tmp = self.align(timepoint,  tau_before, tau_after, key, column_align)
             self.aligned_data.append(tmp)
+   
+
+    def plot_centerline(self, ax, events = None, events_kwargs={}, **kwargs ):
+        """Generate a plot with the centerlines overlaid on top of a track."""
+        XY = self.data[['x','y']].values
+        cl = self.centerline
+        plot = _centerline_plot(ax, XY, cl,events = events, events_kwargs = events_kwargs,  **kwargs)
+        return plot
+   
 
    
 # region Experiment 
@@ -838,6 +868,8 @@ class Experiment(PickleDumpLoadMixin):
             fps_units (str): units of framerate, if None assumes 's', default is None
             samples (list, optional): list of Worm objects, default is None
             color (str): color for plotting
+            loader_cls (pga.loader.Loader): A loader class for loading data
+            loader_kwargs (dict): arguments for the loader class
         Returns:
             None
         """
