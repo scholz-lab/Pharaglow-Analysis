@@ -1439,7 +1439,8 @@ class Experiment(PickleDumpLoadMixin):
         color = kwargs.pop('color', self.color)
         clrs = [color]*len(x_data)
         lbls = lbls=[f"{categorical_data.index.name}={categorical_data.index[i]}" for i in range(len(categorical_data))]
-        plot = style.scatterBoxplot(ax = ax, x_data = x_data, y_data= categorical_data.values,  clrs=[None, None], lbls = lbls, **kwargs)
-        return plot, x_data, categorical_data
+        y_data = [row[np.isfinite(row)] for row in categorical_data.values]
+        plot = style.scatterBoxplot(ax = ax, x_data = x_data, y_data=y_data,  clrs=clrs, lbls = lbls, **kwargs)
+        return plot, x_data,y_data
                        
                        

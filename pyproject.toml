@@ -1,5 +1,5 @@
 [project]
-name = "pumping"
+name = "pg_analysis"
 version = "0.0.0"
 description = "uv environment for pharaglow, pharaglow-analysis and similar."
 
@@ -37,3 +37,5 @@ dependencies = [
     "pyampd>=0.0.1",
     "requests>=2.32.4",
 ]
+[tool.uv.sources]
+my-local-package = { path = ".", editable = true }
