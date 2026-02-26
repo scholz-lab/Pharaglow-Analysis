@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Type
 import warnings
 import yaml
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -975,6 +976,10 @@ class Experiment(PickleDumpLoadMixin):
         if not append:
             self.samples = []
         j = 0
+
+        regex_characters = r"[\.\^\$\*\+\?\{\}\[\]\\\|\(\)]"
+        if not bool(re.search(regex_characters, filterword)):
+            filterword = f'*{filterword}*'
 
         path = Path(path)
         for f in path.glob(filterword):
