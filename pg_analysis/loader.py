@@ -312,7 +312,7 @@ class MacroscopeLoader(Loader):
          # Optional: apply column selection from Loader
         if columns is not None:
             missing = [c for c in columns if c not in df.columns]
-            if missing and self.strict_columns:
+            if missing and strict_columns:
                 raise ValueError(f"Requested columns not found: {missing}")
             df = df[[c for c in columns if c in df.columns]]
 

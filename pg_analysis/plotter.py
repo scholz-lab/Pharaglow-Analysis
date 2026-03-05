@@ -148,11 +148,15 @@ def _heatmap(x, y, ax, **kwargs):
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
                 # a heatmap of the data
-            im = ax[(wi)%len(ax)].imshow(yi.values.T, **kwargs)
+            data = yi.values.T.astype(float)
+            masked_array = np.ma.array (data, mask=np.isnan(data))
+            im = ax[(wi)%len(ax)].imshow(masked_array, **kwargs)
             plot.append(im)
     else:
         # a heatmap of the data
-        im = ax.imshow(y.values.T, **kwargs)
+        data = y.values.T.astype(float)
+        masked_array = np.ma.array (data, mask=np.isnan(data))
+        im = ax.imshow(masked_array, **kwargs)
         plot.append(im)
     return plot
 
