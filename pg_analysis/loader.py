@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional
 import numpy as np
@@ -318,7 +319,8 @@ class MacroscopeLoader(Loader):
 
         # ---- find associated centerline file. This assumes namimg convention as in macroscope_data analysis
         try:
-            fname_cl = Path(fname).parent/(Path(fname).stem.split('_')[0]+'_um_centerlines.csv')
+            stem = Path(fname).stem.removesuffix('_signals')
+            fname_cl = Path(fname).parent / (stem + '_um_centerlines.csv')
             self.centerline = np.loadtxt(fname_cl, delimiter = ',').reshape(-1,100,2)
         except FileNotFoundError:
             warnings.warn(f'No centerline file found at {fname_cl}')

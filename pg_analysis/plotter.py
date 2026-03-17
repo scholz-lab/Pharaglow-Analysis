@@ -911,7 +911,7 @@ class Experiment(PickleDumpLoadMixin):
         """
         assert self.strain == other.strain, "Strains don't match."
         assert self.condition == other.condition, "conditions don't match"
-        return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [*self.samples, *other.samples])
+        return Experiment(strain = self.strain, condition = self.condition, scale = self.scale, fps = self.fps, samples = [*self.samples, *other.samples])
     
 
     def __len__(self):
@@ -929,14 +929,14 @@ class Experiment(PickleDumpLoadMixin):
         if isinstance(key, slice):
             # do your handling for a slice object:
             samples = self.samples[key.start:key.stop:key.step]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = samples.copy())
+            return Experiment(strain = self.strain, condition = self.condition, scale = self.scale, fps = self.fps, samples = samples.copy())
         elif isinstance( key, int ):
             if key < 0 : #Handle negative indices
                 key += len( self )
             if key < 0 or key >= len(self) :
                 raise IndexError(f"The index ({key}) is out of range.")
             sample = self.samples[key]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample].copy())
+            return Experiment(strain = self.strain, condition = self.condition, scale = self.scale, fps = self.fps, samples = [sample].copy())
         else:
             raise TypeError("Invalid argument type.")
     
@@ -1171,7 +1171,7 @@ class Experiment(PickleDumpLoadMixin):
         for keyword in kwargs:
             self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
 #         # run function
-        if key is not 'default':
+        if key != 'default':
             kwargs['key'] = key
         for worm in self.samples:
              worm.calculate_property(name, **kwargs)
