@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
+from pg_analysis import plotter as pga
 
 
 class Loader:
@@ -326,3 +327,138 @@ class MacroscopeLoader(Loader):
             warnings.warn(f'No centerline file found at {fname_cl}')
        
         return df
+    
+
+    
+class MultiWormLoaderTrackMate:
+    """
+    Reads a multi-particle CSV once and vends one Loader-compatible
+    object per particle.
+    """
+    # rename columns
+    
+    def __init__(
+        self,
+        filepath: str,
+        particle_col: str = "particle",
+        columns: Optional[List[str]] = None,
+        sort_column = 'FRAME'
+    ):
+
+        rename_map = {
+            "LABEL": "label",
+            "ID": "id",
+            "QUALITY": "quality",
+            "POSITION_X": "x",
+            "POSITION_Y": "y",
+            "POSITION_Z": "z",
+            "POSITION_T": "t",
+            "FRAME": "frame",
+            "RADIUS": "radius",
+            "VISIBILITY": "visibility",
+            "MEAN_INTENSITY_CH1": "mean_intensity_ch1",
+            "MEDIAN_INTENSITY_CH1": "median_intensity_ch1",
+            "MIN_INTENSITY_CH1": "min_intensity_ch1",
+            "MAX_INTENSITY_CH1": "max_intensity_ch1",
+            "TOTAL_INTENSITY_CH1": "total_intensity_ch1",
+            "STD_INTENSITY_CH1": "std_intensity_ch1",
+            "CONTRAST_CH1": "contrast_ch1",
+            "SNR_CH1": "snr_ch1",
+        }
+        self.filepath = Path(filepath)
+        self.particle_col = particle_col
+        self.sort_column = rename_map.get(sort_column, sort_column)
+        # read units
+        header = pd.read_csv(self.filepath, nrows=0).columns.tolist()
+        units = pd.read_csv(self.filepath, skiprows=3, nrows=1, header=None).iloc[0].tolist()
+        units = [u.strip("()") if isinstance(u, str) else u for u in units]
+        
+        self.units = dict(zip(header, units))
+        self.units = {rename_map.get(k,k): v for k, v in self.units.items()}
+        
+        df = pd.read_csv(filepath, skiprows=(1,2,3))
+        if particle_col not in df.columns:
+            raise ValueError(f"Column '{particle_col}' not found in {filepath}")
+        if columns:
+            keep = list({particle_col} | (set(columns) & set(df.columns)))
+            df = df[keep]
+        
+        
+        # Build mapping for actual columns in the dataframe
+        actual_rename = {}
+        for old_col in df.columns:
+            if old_col in rename_map:
+                actual_rename[old_col] = rename_map[old_col]
+        df = df.rename(columns=actual_rename)
+        # group by track
+        self._groups = {
+            pid: grp.reset_index(drop=True)
+            for pid, grp in df.groupby(particle_col)
+        }
+
+    @property
+    def particle_ids(self) -> List:
+        return list(self._groups.keys())
+
+    def get_particle_loader(self, particle_id) -> "_SingleParticleLoader":
+        if particle_id not in self._groups:
+            raise KeyError(f"Particle {particle_id} not found.")
+        return _SingleParticleLoader(self._groups[particle_id], self.units, self.sort_column)
+
+
+
+def worms_from_multi_csv(
+    filepath: str,
+    fps: float,
+    scale: float,
+    particle_col: str = "particle",
+    columns: Optional[List[str]] = None,
+    scale_units: str = "um",
+    fps_units: str = "s",
+    particle_ids: Optional[List] = None,   # ← add this
+) -> List[Worm]:
+    """
+    Factory: read a multi-particle CSV and return one Worm per particle - uses the normal loader class.
+
+    Example
+    -------
+    worms = worms_from_multi_csv("tracks.csv", fps=25, scale=0.16)
+    for w in worms:
+        w.load_data()
+    """
+    multi = MultiWormLoaderTrackMate(filepath, particle_col=particle_col, columns=columns)
+    # allows to filter ids
+    ids = particle_ids if particle_ids is not None else multi.particle_ids
+    return [
+        pga.Worm(
+            filename=filepath,
+            fps=fps,
+            scale=scale,
+            scale_units=scale_units,
+            fps_units=fps_units,
+            columns=columns,
+            particle_index=pid,
+            loader_cls=None,
+            loader_kwargs={},
+            preloaded_loader=multi.get_particle_loader(pid),  # ← picked up by load_data
+        )
+        for pid in ids
+        if pid in multi.particle_ids 
+    ]
+
+
+class _SingleParticleLoader:
+    """Loader-compatible shim for a single particle's DataFrame slice."""
+
+    def __init__(self, df: pd.DataFrame, units: dict, sort_column = 'frame'):
+        self._df = df.sort_values(sort_column).reset_index()
+        self.units = units
+        self.centerline = None
+        self.images = None
+
+    def get_dataframe(self) -> pd.DataFrame:
+        return self._df.copy()
+
+    def get_units(self) -> dict:
+        
+        return self.units
