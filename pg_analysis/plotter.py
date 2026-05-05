@@ -43,25 +43,25 @@ def _lineplot(x ,y, yerr , ax, **kwargs):
             yi = y.iloc[:,wi]
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
-            
+            alpha_error = kwargs.pop('alpha_error', 0.5)
             plot.append(ax[(wi)%len(ax)].plot(xi.values, yi.values, **kwargs))
             if yerr is not None:
                 yerr_i = yerr.iloc[:,wi]
-                alpha_eror = kwargs.pop('alpha_error', 0.5)
+                
                 # ensure errorbar color matched plot lines
                 kwargs.pop('color')
+                kwargs['alpha'] = alpha_error
                 color = plot[-1].get_color()
-                ax[(wi)%len(ax)].fill_between(xi.values, yi.values-yerr_i.values, yi.values+yerr_i.values,color = color,  alpha = alpha_error, **kwargs)
+                ax[(wi)%len(ax)].fill_between(xi.values, yi.values-yerr_i.values, yi.values+yerr_i.values, color = color,   **kwargs)
     else:
-        
+        alpha_error = kwargs.pop('alpha_error', 0.5)
         plot = ax.plot(x.values, y.values, **kwargs)
         if yerr is not None:
-            alpha_error = kwargs.pop('alpha_error', 0.5)
+           
             kwargs.pop('color')
-            print(plot)
+            kwargs['alpha'] = alpha_error
             color = plot[-1].get_color()
-            #print(color)
-            ax.fill_between(x.values, y.values-yerr.values, y.values+yerr.values, alpha = alpha_error, lw=0, color = color, **kwargs)
+            ax.fill_between(x.values, y.values-yerr.values, y.values+yerr.values,  lw=0, color = color, **kwargs)
     return plot
 
 
@@ -149,11 +149,15 @@ def _heatmap(x, y, ax, **kwargs):
             if wi>len(ax):
                 warnings.warn('Too few subplots detected. Multiple samples will be plotted in a subplot.')
                 # a heatmap of the data
-            im = ax[(wi)%len(ax)].imshow(yi.values.T, **kwargs)
+            data = yi.values.T.astype(float)
+            masked_array = np.ma.array (data, mask=np.isnan(data))
+            im = ax[(wi)%len(ax)].imshow(masked_array, **kwargs)
             plot.append(im)
     else:
         # a heatmap of the data
-        im = ax.imshow(y.values.T, **kwargs)
+        data = y.values.T.astype(float)
+        masked_array = np.ma.array (data, mask=np.isnan(data))
+        im = ax.imshow(masked_array, **kwargs)
         plot.append(im)
     return plot
 
@@ -187,6 +191,7 @@ class Worm(PickleDumpLoadMixin):
         particle_index: Optional[int] = None,
         loader_cls: Type[Loader] = Loader,
         loader_kwargs: Optional[Dict[str, Any]] = None,
+        preloaded_loader: None,
     ):
         """
         Initialization only stores metadata and configuration.
@@ -216,6 +221,8 @@ class Worm(PickleDumpLoadMixin):
 
         # Metadata
         self.experiment = self.filename.name
+        # in case we are generating worms from a multi-particle file
+        self._preloaded_loader = preloaded_loader   # None for normal single-file use
 
         try:
             self.particle_index = particle_index or self._infer_particle_index()
@@ -239,7 +246,7 @@ class Worm(PickleDumpLoadMixin):
 
         print(f"Reading {self.filename}")
 
-        loader = self.loader_cls(
+        loader = self._preloaded_loader or self.loader_cls(
             filepath=str(self.filename),
             columns=self.columns,
             
@@ -542,11 +549,10 @@ class Worm(PickleDumpLoadMixin):
         self.data.loc[:,'y_scaled'] = self.data['y']*self.scale
         self.units['x_scaled'] = self.units['space_units']
         self.units['y_scaled'] = self.units['space_units']
-        try:
+        if self.centerline is not None:
             self.centerline_scaled = self.centerline*self.scale
             self.units['centerline_scaled'] = self.units['space_units']
-        except AttributeError:
-            pass
+       
             
         
     def calculate_velocity(self, units=None, dt = 1, columns = ['x', 'y']):
@@ -909,7 +915,7 @@ class Experiment(PickleDumpLoadMixin):
         """
         assert self.strain == other.strain, "Strains don't match."
         assert self.condition == other.condition, "conditions don't match"
-        return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [*self.samples, *other.samples])
+        return Experiment(strain = self.strain, condition = self.condition, scale = self.scale, fps = self.fps, samples = [*self.samples, *other.samples])
     
 
     def __len__(self):
@@ -927,14 +933,14 @@ class Experiment(PickleDumpLoadMixin):
         if isinstance(key, slice):
             # do your handling for a slice object:
             samples = self.samples[key.start:key.stop:key.step]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = samples.copy())
+            return Experiment(strain = self.strain, condition = self.condition, scale = self.scale, fps = self.fps, samples = samples.copy())
         elif isinstance( key, int ):
             if key < 0 : #Handle negative indices
                 key += len( self )
             if key < 0 or key >= len(self) :
                 raise IndexError(f"The index ({key}) is out of range.")
             sample = self.samples[key]
-            return Experiment(self.strain, self.condition, self.scale, self.fps, samples = [sample].copy())
+            return Experiment(strain = self.strain, condition = self.condition, scale = self.scale, fps = self.fps, samples = [sample].copy())
         else:
             raise TypeError("Invalid argument type.")
     
@@ -1019,6 +1025,8 @@ class Experiment(PickleDumpLoadMixin):
         except KeyError:
             print('Please define the experimental metadata first by providing a dictionary to self.define_metadata.')
         
+        # get the time
+        self.calculate_property('time')
         # get the scaled coordinates
         self.calculate_property('locations')
         # update units
@@ -1171,7 +1179,7 @@ class Experiment(PickleDumpLoadMixin):
         for keyword in kwargs:
             self.metadata[f"{name}_{key}"][keyword] = kwargs[keyword]
 #         # run function
-        if key is not 'default':
+        if key != 'default':
             kwargs['key'] = key
         for worm in self.samples:
              worm.calculate_property(name, **kwargs)
@@ -1418,3 +1426,33 @@ class Experiment(PickleDumpLoadMixin):
         else:
              raise NotImplementedError("plot_type not implemented, choose one of 'line', 'histogram', 'scatter', 'density', 'bar', 'box'.")
         return plot, x, y
+
+    
+   
+    def categorical_plot(self, ax, key, category, metric = 'mean', **kwargs):
+        """
+        Plot the data in a boxplot as grouped by a categorical variable
+        
+        Args:
+            ax (matplotlib.pyplot.axes or list): either matplotlib axis object or list of axes
+            key (str ): column of data in the Worm object. 
+            category (str ): column of data in the Worm object that contains categorical data 
+            metric (None or str or list of str): metric to apply to the data in each category
+            axis (int): axis = 1 plots the sample-averaged timeseries of the data, axis = 0 plots the time-averaged metric of each sample in the data.
+        Returns
+            tuple containing
+                - plot
+                - x (Series): data on x-axis
+                - y (Series): data on y-axis
+        """
+        categorical_data = self.get_sample_metric_categorical(key = key, category=category, metric=metric)
+        # generate x locations for a box plot from the number of categories
+        x_data = range(len(categorical_data))
+        color = kwargs.pop('color', self.color)
+        clrs = [color]*len(x_data)
+        lbls = lbls=[f"{categorical_data.index.name}={categorical_data.index[i]}" for i in range(len(categorical_data))]
+        y_data = [row[np.isfinite(row)] for row in categorical_data.values]
+        plot = style.scatterBoxplot(ax = ax, x_data = x_data, y_data=y_data,  clrs=clrs, lbls = lbls, **kwargs)
+        return plot, x_data,y_data
+                       
+                       

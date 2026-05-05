@@ -1,3 +1,4 @@
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional
 import numpy as np
@@ -318,13 +319,14 @@ class MacroscopeLoader(Loader):
          # Optional: apply column selection from Loader
         if columns is not None:
             missing = [c for c in columns if c not in df.columns]
-            if missing and self.strict_columns:
+            if missing and strict_columns:
                 raise ValueError(f"Requested columns not found: {missing}")
             df = df[[c for c in columns if c in df.columns]]
 
         # ---- find associated centerline file. This assumes namimg convention as in macroscope_data analysis
         try:
-            fname_cl = Path(fname).parent/(Path(fname).stem.split('_')[0]+'_um_centerlines.csv')
+            stem = Path(fname).stem.removesuffix('_signals')
+            fname_cl = Path(fname).parent / (stem + '_um_centerlines.csv')
             self.centerline = np.loadtxt(fname_cl, delimiter = ',').reshape(-1,100,2)
         except FileNotFoundError:
             warnings.warn(f'No centerline file found at {fname_cl}')
