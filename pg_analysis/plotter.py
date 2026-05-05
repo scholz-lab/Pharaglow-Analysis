@@ -235,6 +235,7 @@ class Worm(PickleDumpLoadMixin):
         self.units = {'time_units': fps_units,
                       'space_units': scale_units}
     
+    
     # ------------------------------------------------------------------
     # Loading data
     # ------------------------------------------------------------------
@@ -247,10 +248,9 @@ class Worm(PickleDumpLoadMixin):
         print(f"Reading {self.filename}")
 
         loader = self._preloaded_loader or self.loader_cls(
-            filepath=str(self.filename),
-            columns=self.columns,
-            
-            **self.loader_kwargs,
+        filepath=str(self.filename),
+        columns=self.columns,
+        **self.loader_kwargs,
         )
 
         self.data = loader.get_dataframe()
