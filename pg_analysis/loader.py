@@ -4,6 +4,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 from pg_analysis import plotter as pga
+import json
+
 
 
 class Loader:
@@ -136,9 +138,14 @@ class Loader:
             df = df[[c for c in columns if c in df.columns]]
         # extract the non-scalar data if present
         if "Centerline" in df.columns:
-            self.centerline = np.array(
-                [np.array(cl) for cl in df["Centerline"]]
-            )
+            if isinstance(df['Centerline'][0], str):
+                self.centerline = np.array(
+                [np.array(json.loads(cl)) for cl in df["Centerline"]]
+                )
+            else:
+                self.centerline = np.array(
+                    [np.array(cl) for cl in df["Centerline"]]
+                )
 
         if "Straightened" in df.columns:
             self.images = np.array(

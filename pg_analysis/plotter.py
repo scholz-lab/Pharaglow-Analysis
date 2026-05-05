@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Type
 import warnings
 import yaml
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -190,7 +191,7 @@ class Worm(PickleDumpLoadMixin):
         particle_index: Optional[int] = None,
         loader_cls: Type[Loader] = Loader,
         loader_kwargs: Optional[Dict[str, Any]] = None,
-        preloaded_loader: Type[Loader] = None,
+        preloaded_loader: None,
     ):
         """
         Initialization only stores metadata and configuration.
@@ -981,6 +982,10 @@ class Experiment(PickleDumpLoadMixin):
         if not append:
             self.samples = []
         j = 0
+
+        regex_characters = r"[\.\^\$\*\+\?\{\}\[\]\\\|\(\)]"
+        if not bool(re.search(regex_characters, filterword)):
+            filterword = f'*{filterword}*'
 
         path = Path(path)
         for f in path.glob(filterword):
