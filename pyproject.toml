@@ -1,6 +1,6 @@
 [project]
 name = "pg_analysis"
-version = "0.0.0"
+version = "0.0.1"
 description = "uv environment for pharaglow, pharaglow-analysis and similar."
 
 requires-python = ">=3.10"
@@ -36,6 +36,7 @@ dependencies = [
     # Misc
     "pyampd>=0.0.1",
     "requests>=2.32.4",
+    "openpyxl>=3.1.5",
 ]
 [tool.uv.sources]
 my-local-package = { path = ".", editable = true }

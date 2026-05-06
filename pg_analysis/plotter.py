@@ -190,7 +190,7 @@ class Worm(PickleDumpLoadMixin):
         particle_index: Optional[int] = None,
         loader_cls: Type[Loader] = Loader,
         loader_kwargs: Optional[Dict[str, Any]] = None,
-        preloaded_loader: None,
+        preloaded_loader= None,
     ):
         """
         Initialization only stores metadata and configuration.
@@ -222,7 +222,6 @@ class Worm(PickleDumpLoadMixin):
         self.experiment = self.filename.name
         # in case we are generating worms from a multi-particle file
         self._preloaded_loader = preloaded_loader   # None for normal single-file use
-
         try:
             self.particle_index = particle_index or self._infer_particle_index()
         except ValueError:
@@ -244,11 +243,9 @@ class Worm(PickleDumpLoadMixin):
         """
 
         print(f"Reading {self.filename}")
-
         loader = self._preloaded_loader or self.loader_cls(
             filepath=str(self.filename),
             columns=self.columns,
-            
             **self.loader_kwargs,
         )
 
