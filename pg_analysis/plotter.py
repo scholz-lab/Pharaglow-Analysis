@@ -191,7 +191,7 @@ class Worm(PickleDumpLoadMixin):
         particle_index: Optional[int] = None,
         loader_cls: Type[Loader] = Loader,
         loader_kwargs: Optional[Dict[str, Any]] = None,
-        preloaded_loader: None,
+        preloaded_loader= None,
     ):
         """
         Initialization only stores metadata and configuration.
@@ -1102,6 +1102,11 @@ class Experiment(PickleDumpLoadMixin):
         """create a unique ID matching raw data for each sample"""
         for worm in self.samples:
             worm.create_ID()
+            
+    def get_IDs(self):
+        """"return the IDs for all samples in order."""
+        self.create_IDs()
+        return [worm.id for worm in self.samples]
     
     def update_units(self):
         """Synchronize units with all worm sample units."""
