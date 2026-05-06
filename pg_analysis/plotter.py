@@ -1291,7 +1291,25 @@ class Experiment(PickleDumpLoadMixin):
         for worm in self.samples:
             tmp.append(worm.get_metric_categorical(key, category, metric))
         return pd.concat(tmp, axis=1)
+    
+    
+    # generate report
+    def generate_summary_stats(self, keys, metrics):
+        """
+        Generate a dataframe with per-worm metrics.
+        Args:
+            keys (list): list of keys to calculate metrics from
+            metrics (list): metrics to calculate per column, same order as keys. Each must be one of ['sum','mean','std','N','sem','median','max','min']
+        Returns:
+            pd.DataFrame: index contains the ids of each worm, columns the key_metric pair.
+        """
+        ids = dset.get_IDs()
+        df = pd.DataFrame(index = ids)
+        for key, metric in zip(keys, metrics):
+            df[f'{key}_{metric}'] = dset.get_sample_metric(key=key, metric=metric, axis=0).values
+        return df
 
+    
     def get_events(self, events = 'pump_events' ,unit = None, aligned = False):
         """ 
         Get peak locations for all samples, using :func:Worm.get_events
